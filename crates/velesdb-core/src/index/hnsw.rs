@@ -151,43 +151,43 @@ impl VectorIndex for HnswIndex {
             query.len()
         );
 
-        let ef_search = 50.max(k * 2); // ef should be >= k
+        // Perf: ef_search tuned for recall/speed tradeoff
+        // Higher ef = better recall but slower search
+        let ef_search = 50.max(k * 2);
         let inner = self.inner.read();
         let idx_to_id = self.idx_to_id.read();
 
-        let results: Vec<(u64, f32)> = match &*inner {
+        // Perf: Pre-allocate result vector to avoid reallocations
+        let mut results: Vec<(u64, f32)> = Vec::with_capacity(k);
+
+        match &*inner {
             HnswInner::Cosine(hnsw) => {
                 let neighbours = hnsw.search(query, k, ef_search);
-                neighbours
-                    .iter()
-                    .filter_map(|n| {
-                        idx_to_id.get(&n.d_id).map(|&id| {
-                            // Cosine: hnsw_rs returns distance, we want similarity
-                            (id, 1.0 - n.distance)
-                        })
-                    })
-                    .collect()
+                for n in &neighbours {
+                    if let Some(&id) = idx_to_id.get(&n.d_id) {
+                        // Cosine: hnsw_rs returns distance, we want similarity
+                        results.push((id, 1.0 - n.distance));
+                    }
+                }
             }
             HnswInner::Euclidean(hnsw) => {
                 let neighbours = hnsw.search(query, k, ef_search);
-                neighbours
-                    .iter()
-                    .filter_map(|n| idx_to_id.get(&n.d_id).map(|&id| (id, n.distance)))
-                    .collect()
+                for n in &neighbours {
+                    if let Some(&id) = idx_to_id.get(&n.d_id) {
+                        results.push((id, n.distance));
+                    }
+                }
             }
             HnswInner::DotProduct(hnsw) => {
                 let neighbours = hnsw.search(query, k, ef_search);
-                neighbours
-                    .iter()
-                    .filter_map(|n| {
-                        idx_to_id.get(&n.d_id).map(|&id| {
-                            // DotProduct: higher is better
-                            (id, -n.distance)
-                        })
-                    })
-                    .collect()
+                for n in &neighbours {
+                    if let Some(&id) = idx_to_id.get(&n.d_id) {
+                        // DotProduct: higher is better
+                        results.push((id, -n.distance));
+                    }
+                }
             }
-        };
+        }
 
         results
     }
