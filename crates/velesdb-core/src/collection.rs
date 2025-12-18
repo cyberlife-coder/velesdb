@@ -179,7 +179,8 @@ impl Collection {
             }
 
             // 3. Update Index
-            // Note: HNSW update usually handles replacement if ID exists
+            // Note: HnswIndex.insert() skips if ID already exists (no updates supported)
+            // For true upsert semantics, we'd need to remove then re-insert
             self.index.insert(point.id, &point.vector);
         }
 

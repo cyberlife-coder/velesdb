@@ -99,11 +99,11 @@ impl HnswIndex {
     /// * `dimension` - The dimension of vectors to index
     /// * `metric` - The distance metric to use for similarity calculations
     ///
-    /// # HNSW Parameters
+    /// # HNSW Parameters (optimized for >95% recall)
     ///
-    /// - `max_nb_connection` (M): 16 - Number of connections per layer
-    /// - `ef_construction`: 200 - Size of dynamic candidate list during construction
-    /// - `max_elements`: `100_000` - Maximum number of elements (can grow)
+    /// - `max_nb_connection` (M): 32 - Number of connections per layer
+    /// - `ef_construction`: 400 - Size of dynamic candidate list during construction
+    /// - `max_elements`: 100,000 - Initial capacity (grows automatically)
     #[must_use]
     pub fn new(dimension: usize, metric: DistanceMetric) -> Self {
         // HNSW parameters optimized for >95% recall while maintaining <10ms search
