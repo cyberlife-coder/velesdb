@@ -87,6 +87,9 @@ fn bench_ef_search_sweep(c: &mut Criterion) {
         vectors.push((i as u64, vector));
     }
 
+    // Set searching mode after bulk insertion
+    index.set_searching_mode();
+
     // Generate queries and ground truth
     let queries: Vec<Vec<f32>> = (0..num_queries)
         .map(|i| generate_vector(dim, (num_vectors + i) as u64))
@@ -98,9 +101,9 @@ fn bench_ef_search_sweep(c: &mut Criterion) {
         .collect();
 
     // Test different ef_search values
-    // Note: We can't directly set ef_search on HnswIndex, so we measure current behavior
-    // This benchmark shows what the current setting achieves
-    println!("\n🔍 Current HnswIndex configuration (M=32, ef_construction=400, ef_search=200):\n");
+    // Default search uses SearchQuality::Balanced (ef_search=128)
+    // Use search_with_quality() for custom ef_search values
+    println!("\n🔍 Current HnswIndex configuration (M=32, ef_construction=400, Balanced=ef_search=128):\n");
 
     // Measure recall with current settings
     let mut total_recall = 0.0;
@@ -154,6 +157,9 @@ fn bench_recall_at_k(c: &mut Criterion) {
         vectors.push((i as u64, vector));
     }
 
+    // Set searching mode after bulk insertion
+    index.set_searching_mode();
+
     let queries: Vec<Vec<f32>> = (0..num_queries)
         .map(|i| generate_vector(dim, (num_vectors + i) as u64))
         .collect();
@@ -202,6 +208,9 @@ fn bench_scalability(c: &mut Criterion) {
             let vector = generate_vector(dim, i as u64);
             index.insert(i as u64, &vector);
         }
+
+        // Set searching mode after bulk insertion
+        index.set_searching_mode();
 
         let query = generate_vector(dim, 999_999);
 
