@@ -1,0 +1,234 @@
+//! WIS-1 Validation Benchmarks
+//!
+//! Validates the acceptance criteria for WIS-1 (HNSW Index):
+//! - Performance < 10ms for 100k vectors search
+//! - Recall > 95% on standard benchmarks
+//!
+//! Run with: `cargo bench --bench wis1_validation`
+
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::collections::HashSet;
+use velesdb_core::{DistanceMetric, HnswIndex, VectorIndex};
+
+/// Simple LCG random number generator for reproducible benchmarks.
+struct SimpleRng {
+    state: u64,
+}
+
+impl SimpleRng {
+    fn new(seed: u64) -> Self {
+        Self {
+            state: seed.wrapping_add(1),
+        }
+    }
+
+    fn next_f32(&mut self) -> f32 {
+        // LCG parameters from Numerical Recipes
+        self.state = self
+            .state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        // Convert to [0, 1) range
+        (self.state >> 33) as f32 / (1u64 << 31) as f32
+    }
+}
+
+/// Generates a normalized random vector for benchmarking.
+fn generate_vector(dim: usize, seed: u64) -> Vec<f32> {
+    let mut rng = SimpleRng::new(seed);
+    let mut vec: Vec<f32> = (0..dim).map(|_| rng.next_f32() * 2.0 - 1.0).collect();
+
+    // Normalize for cosine similarity
+    let norm: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        vec.iter_mut().for_each(|x| *x /= norm);
+    }
+    vec
+}
+
+/// Brute-force exact k-NN search for recall calculation.
+fn brute_force_knn(
+    vectors: &[(u64, Vec<f32>)],
+    query: &[f32],
+    k: usize,
+    metric: DistanceMetric,
+) -> Vec<u64> {
+    let mut distances: Vec<(u64, f32)> = vectors
+        .iter()
+        .map(|(id, vec)| {
+            let dist = match metric {
+                DistanceMetric::Cosine => {
+                    let dot: f32 = query.iter().zip(vec.iter()).map(|(a, b)| a * b).sum();
+                    1.0 - dot // cosine distance
+                }
+                DistanceMetric::Euclidean => query
+                    .iter()
+                    .zip(vec.iter())
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f32>()
+                    .sqrt(),
+                DistanceMetric::DotProduct => -query
+                    .iter()
+                    .zip(vec.iter())
+                    .map(|(a, b)| a * b)
+                    .sum::<f32>(),
+            };
+            (*id, dist)
+        })
+        .collect();
+
+    distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    distances.into_iter().take(k).map(|(id, _)| id).collect()
+}
+
+/// Calculate recall: proportion of true nearest neighbors found.
+fn calculate_recall(hnsw_results: &[(u64, f32)], ground_truth: &[u64]) -> f64 {
+    let hnsw_ids: HashSet<u64> = hnsw_results.iter().map(|(id, _)| *id).collect();
+    let truth_ids: HashSet<u64> = ground_truth.iter().copied().collect();
+
+    let intersection = hnsw_ids.intersection(&truth_ids).count();
+    intersection as f64 / ground_truth.len() as f64
+}
+
+/// WIS-1 Criterion 1: Performance < 10ms for 100k vectors search
+fn bench_100k_search_latency(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wis1_100k_search");
+    group.sample_size(50); // Reduce samples for large dataset
+
+    let dim = 128; // Standard embedding dimension
+    let num_vectors = 100_000;
+
+    println!(
+        "\n📊 Building index with {} vectors (dim={})...",
+        num_vectors, dim
+    );
+
+    let index = HnswIndex::new(dim, DistanceMetric::Cosine);
+
+    // Insert 100k vectors
+    for i in 0..num_vectors {
+        let vector = generate_vector(dim, i as u64);
+        index.insert(i as u64, &vector);
+    }
+
+    println!("✅ Index built with {} vectors", index.len());
+
+    let query = generate_vector(dim, 999_999);
+
+    for k in [10, 50].iter() {
+        group.bench_with_input(
+            BenchmarkId::new("search_100k", format!("top_{}", k)),
+            k,
+            |b, &k| {
+                b.iter(|| {
+                    let results = index.search(&query, k);
+                    black_box(results)
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// WIS-1 Criterion 2: Recall > 95%
+/// This is a test, not a benchmark - prints recall metrics
+fn bench_recall_measurement(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wis1_recall");
+    group.sample_size(10);
+
+    let dim = 128;
+    let num_vectors = 10_000; // Smaller for recall calculation (brute force is O(n))
+    let k = 10;
+    let num_queries = 100;
+
+    println!("\n📊 Measuring recall with {} vectors...", num_vectors);
+
+    // Build index
+    let index = HnswIndex::new(dim, DistanceMetric::Cosine);
+    let mut vectors: Vec<(u64, Vec<f32>)> = Vec::with_capacity(num_vectors);
+
+    for i in 0..num_vectors {
+        let vector = generate_vector(dim, i as u64);
+        index.insert(i as u64, &vector);
+        vectors.push((i as u64, vector));
+    }
+
+    // Generate queries and measure recall
+    let mut total_recall = 0.0;
+
+    for q in 0..num_queries {
+        let query = generate_vector(dim, (num_vectors + q) as u64);
+
+        // HNSW search
+        let hnsw_results = index.search(&query, k);
+
+        // Brute force ground truth
+        let ground_truth = brute_force_knn(&vectors, &query, k, DistanceMetric::Cosine);
+
+        // Calculate recall
+        let recall = calculate_recall(&hnsw_results, &ground_truth);
+        total_recall += recall;
+    }
+
+    let avg_recall = total_recall / num_queries as f64;
+    println!("\n🎯 Average Recall@{}: {:.2}%", k, avg_recall * 100.0);
+    println!(
+        "   {} WIS-1 Criterion: Recall > 95%\n",
+        if avg_recall >= 0.95 { "✅" } else { "❌" }
+    );
+
+    // Dummy benchmark to include in report
+    group.bench_function("recall_calculation", |b| {
+        let query = generate_vector(dim, 999_999);
+        b.iter(|| {
+            let results = index.search(&query, k);
+            black_box(results)
+        });
+    });
+
+    group.finish();
+}
+
+/// Combined validation for all 3 metrics
+/// Note: DotProduct excluded due to hnsw_rs constraint (requires non-negative dot products)
+fn bench_all_metrics(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wis1_all_metrics");
+    group.sample_size(20);
+
+    let dim = 128;
+    let num_vectors = 50_000;
+
+    // DotProduct excluded - hnsw_rs DistDot requires non-negative dot products
+    for metric in [DistanceMetric::Cosine, DistanceMetric::Euclidean].iter() {
+        let index = HnswIndex::new(dim, *metric);
+
+        for i in 0..num_vectors {
+            let vector = generate_vector(dim, i as u64);
+            index.insert(i as u64, &vector);
+        }
+
+        let query = generate_vector(dim, 999_999);
+
+        group.bench_with_input(
+            BenchmarkId::new("search_50k", format!("{:?}", metric)),
+            metric,
+            |b, _| {
+                b.iter(|| {
+                    let results = index.search(&query, 10);
+                    black_box(results)
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_recall_measurement,
+    bench_100k_search_latency,
+    bench_all_metrics
+);
+criterion_main!(benches);
