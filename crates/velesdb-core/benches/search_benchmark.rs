@@ -24,11 +24,7 @@ fn bench_vector_distance(c: &mut Criterion) {
 
     c.bench_function("euclidean_distance_768d", |b| {
         b.iter(|| {
-            let sum: f32 = vec_a
-                .iter()
-                .zip(&vec_b)
-                .map(|(a, b)| (a - b).powi(2))
-                .sum();
+            let sum: f32 = vec_a.iter().zip(&vec_b).map(|(a, b)| (a - b).powi(2)).sum();
             black_box(sum.sqrt())
         });
     });
