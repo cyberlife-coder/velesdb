@@ -61,3 +61,7 @@ harness = false
 [[bench]]
 name = "filter_benchmark"
 harness = false
+
+[[bench]]
+name = "velesql_benchmark"
+harness = false
