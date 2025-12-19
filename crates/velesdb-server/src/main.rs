@@ -13,7 +13,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use velesdb_core::Database;
 use velesdb_server::{
     batch_search, create_collection, delete_collection, delete_point, get_collection, get_point,
-    health_check, list_collections, search, upsert_points, AppState,
+    health_check, list_collections, query, search, upsert_points, AppState,
 };
 
 /// VelesDB Server - A high-performance vector database
@@ -72,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/collections/{name}/search", post(search))
         .route("/collections/{name}/search/batch", post(batch_search))
+        .route("/query", post(query))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
