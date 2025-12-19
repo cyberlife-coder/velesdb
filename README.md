@@ -555,13 +555,30 @@ Looking for a place to start? Check out issues labeled [`good first issue`](http
 ### v0.2.0 (Planned)
 - [ ] Python bindings (PyO3)
 - [ ] CLI / REPL for VelesQL
-- [ ] Rate limiting
 - [ ] OpenAPI/Swagger docs
+- [ ] Additional distance metrics (Hamming, Jaccard)
 
 ### v0.3.0 (Future)
-- [ ] Hybrid search (BM25 + vector)
-- [ ] Distributed mode
-- [ ] RBAC / Multi-tenancy
+- [ ] WebSocket subscriptions for real-time updates
+- [ ] HNSW parameters auto-tuning
+- [ ] Sparse vector support
+
+---
+
+## 💎 VelesDB Premium
+
+Need enterprise features? **VelesDB Premium** extends Core with:
+
+| Feature | Description |
+|---------|-------------|
+| **Hybrid Search** | BM25 + vector fusion for superior relevance |
+| **Encryption at Rest** | AES-256-GCM for data security |
+| **Snapshots** | Atomic backup/restore |
+| **RBAC / Multi-tenancy** | Role-based access control |
+| **Distributed Mode** | Horizontal scaling |
+| **Priority Support** | SLA-backed support |
+
+👉 [Learn more about VelesDB Premium](https://github.com/cyberlife-coder/velesdb-premium)
 
 ---
 
