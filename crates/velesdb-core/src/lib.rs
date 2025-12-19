@@ -190,4 +190,67 @@ mod tests {
         let result = db.create_collection("test", 768, DistanceMetric::Cosine);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_get_collection() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        // Non-existent collection returns None
+        assert!(db.get_collection("nonexistent").is_none());
+
+        // Create and retrieve collection
+        db.create_collection("test", 768, DistanceMetric::Cosine)
+            .unwrap();
+
+        let collection = db.get_collection("test");
+        assert!(collection.is_some());
+
+        let config = collection.unwrap().config();
+        assert_eq!(config.dimension, 768);
+        assert_eq!(config.metric, DistanceMetric::Cosine);
+    }
+
+    #[test]
+    fn test_delete_collection() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        db.create_collection("to_delete", 768, DistanceMetric::Cosine)
+            .unwrap();
+        assert_eq!(db.list_collections().len(), 1);
+
+        // Delete the collection
+        db.delete_collection("to_delete").unwrap();
+        assert!(db.list_collections().is_empty());
+        assert!(db.get_collection("to_delete").is_none());
+    }
+
+    #[test]
+    fn test_delete_nonexistent_collection() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        let result = db.delete_collection("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multiple_collections() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        db.create_collection("coll1", 128, DistanceMetric::Cosine)
+            .unwrap();
+        db.create_collection("coll2", 256, DistanceMetric::Euclidean)
+            .unwrap();
+        db.create_collection("coll3", 768, DistanceMetric::DotProduct)
+            .unwrap();
+
+        let collections = db.list_collections();
+        assert_eq!(collections.len(), 3);
+        assert!(collections.contains(&"coll1".to_string()));
+        assert!(collections.contains(&"coll2".to_string()));
+        assert!(collections.contains(&"coll3".to_string()));
+    }
 }
