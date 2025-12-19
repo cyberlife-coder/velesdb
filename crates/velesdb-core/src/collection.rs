@@ -325,6 +325,7 @@ impl Collection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use tempfile::tempdir;
 
     #[test]
@@ -374,5 +375,189 @@ mod tests {
 
         let result = collection.upsert(points);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_collection_open_existing() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        // Create and populate collection
+        {
+            let collection =
+                Collection::create(path.clone(), 3, DistanceMetric::Euclidean).unwrap();
+            let points = vec![
+                Point::without_payload(1, vec![1.0, 2.0, 3.0]),
+                Point::without_payload(2, vec![4.0, 5.0, 6.0]),
+            ];
+            collection.upsert(points).unwrap();
+            collection.flush().unwrap();
+        }
+
+        // Reopen and verify
+        let collection = Collection::open(path).unwrap();
+        let config = collection.config();
+
+        assert_eq!(config.dimension, 3);
+        assert_eq!(config.metric, DistanceMetric::Euclidean);
+        assert_eq!(collection.len(), 2);
+    }
+
+    #[test]
+    fn test_collection_get_points() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+        let points = vec![
+            Point::without_payload(1, vec![1.0, 0.0, 0.0]),
+            Point::without_payload(2, vec![0.0, 1.0, 0.0]),
+        ];
+        collection.upsert(points).unwrap();
+
+        // Get existing points
+        let retrieved = collection.get(&[1, 2, 999]);
+
+        assert!(retrieved[0].is_some());
+        assert_eq!(retrieved[0].as_ref().unwrap().id, 1);
+        assert!(retrieved[1].is_some());
+        assert_eq!(retrieved[1].as_ref().unwrap().id, 2);
+        assert!(retrieved[2].is_none()); // 999 doesn't exist
+    }
+
+    #[test]
+    fn test_collection_delete_points() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+        let points = vec![
+            Point::without_payload(1, vec![1.0, 0.0, 0.0]),
+            Point::without_payload(2, vec![0.0, 1.0, 0.0]),
+            Point::without_payload(3, vec![0.0, 0.0, 1.0]),
+        ];
+        collection.upsert(points).unwrap();
+        assert_eq!(collection.len(), 3);
+
+        // Delete one point
+        collection.delete(&[2]).unwrap();
+        assert_eq!(collection.len(), 2);
+
+        // Verify it's gone
+        let retrieved = collection.get(&[2]);
+        assert!(retrieved[0].is_none());
+    }
+
+    #[test]
+    fn test_collection_is_empty() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+        assert!(collection.is_empty());
+
+        collection
+            .upsert(vec![Point::without_payload(1, vec![1.0, 0.0, 0.0])])
+            .unwrap();
+        assert!(!collection.is_empty());
+    }
+
+    #[test]
+    fn test_collection_with_payload() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        let points = vec![Point::new(
+            1,
+            vec![1.0, 0.0, 0.0],
+            Some(json!({"title": "Test Document", "category": "tech"})),
+        )];
+        collection.upsert(points).unwrap();
+
+        let retrieved = collection.get(&[1]);
+        assert!(retrieved[0].is_some());
+
+        let point = retrieved[0].as_ref().unwrap();
+        assert!(point.payload.is_some());
+        assert_eq!(point.payload.as_ref().unwrap()["title"], "Test Document");
+    }
+
+    #[test]
+    fn test_collection_search_dimension_mismatch() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+        collection
+            .upsert(vec![Point::without_payload(1, vec![1.0, 0.0, 0.0])])
+            .unwrap();
+
+        // Search with wrong dimension
+        let result = collection.search(&[1.0, 0.0], 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_collection_upsert_replaces_payload() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        // Insert with payload
+        collection
+            .upsert(vec![Point::new(
+                1,
+                vec![1.0, 0.0, 0.0],
+                Some(json!({"version": 1})),
+            )])
+            .unwrap();
+
+        // Upsert without payload (should clear it)
+        collection
+            .upsert(vec![Point::without_payload(1, vec![1.0, 0.0, 0.0])])
+            .unwrap();
+
+        let retrieved = collection.get(&[1]);
+        let point = retrieved[0].as_ref().unwrap();
+        assert!(point.payload.is_none());
+    }
+
+    #[test]
+    fn test_collection_flush() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+        collection
+            .upsert(vec![Point::without_payload(1, vec![1.0, 0.0, 0.0])])
+            .unwrap();
+
+        // Explicit flush should succeed
+        let result = collection.flush();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_collection_euclidean_metric() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Euclidean).unwrap();
+
+        let points = vec![
+            Point::without_payload(1, vec![0.0, 0.0, 0.0]),
+            Point::without_payload(2, vec![1.0, 0.0, 0.0]),
+            Point::without_payload(3, vec![10.0, 0.0, 0.0]),
+        ];
+        collection.upsert(points).unwrap();
+
+        let query = vec![0.5, 0.0, 0.0];
+        let results = collection.search(&query, 3).unwrap();
+
+        // Point 1 (0,0,0) and Point 2 (1,0,0) should be closest to query (0.5,0,0)
+        assert!(results[0].point.id == 1 || results[0].point.id == 2);
     }
 }

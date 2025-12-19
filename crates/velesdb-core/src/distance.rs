@@ -99,4 +99,35 @@ mod tests {
         let product = DistanceMetric::DotProduct.calculate(&a, &b);
         assert!((product - 32.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_higher_is_better() {
+        // Cosine: higher similarity = more similar
+        assert!(DistanceMetric::Cosine.higher_is_better());
+
+        // DotProduct: higher product = more similar
+        assert!(DistanceMetric::DotProduct.higher_is_better());
+
+        // Euclidean: lower distance = more similar
+        assert!(!DistanceMetric::Euclidean.higher_is_better());
+    }
+
+    #[test]
+    fn test_metric_serialization() {
+        // Test that metrics can be serialized/deserialized
+        let metric = DistanceMetric::Cosine;
+        let json = serde_json::to_string(&metric).unwrap();
+        let deserialized: DistanceMetric = serde_json::from_str(&json).unwrap();
+        assert_eq!(metric, deserialized);
+
+        let metric = DistanceMetric::Euclidean;
+        let json = serde_json::to_string(&metric).unwrap();
+        let deserialized: DistanceMetric = serde_json::from_str(&json).unwrap();
+        assert_eq!(metric, deserialized);
+
+        let metric = DistanceMetric::DotProduct;
+        let json = serde_json::to_string(&metric).unwrap();
+        let deserialized: DistanceMetric = serde_json::from_str(&json).unwrap();
+        assert_eq!(metric, deserialized);
+    }
 }
