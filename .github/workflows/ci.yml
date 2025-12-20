@@ -149,15 +149,16 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-build-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-build-${{ matrix.rust }}-
+            ${{ runner.os }}-cargo-registry-${{ matrix.rust }}-
 
-      - name: Build (debug)
-        run: cargo build --all-features
+      - name: Clean target (Windows disk space fix)
+        if: runner.os == 'Windows'
+        run: cargo clean
+        continue-on-error: true
 
-      - name: Build (release)
+      - name: Build (release only - saves disk space)
         run: cargo build --release --all-features
 
   # ===========================================================================
