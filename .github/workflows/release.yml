@@ -151,15 +151,14 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cd crates/velesdb-core
-          cargo publish --allow-dirty || echo "Package already published or error"
+          cargo publish -p velesdb-core || echo "velesdb-core already published"
+          sleep 30  # Wait for crates.io index update
 
       - name: Publish velesdb-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cd crates/velesdb-server
-          cargo publish --allow-dirty || echo "Package already published or error"
+          cargo publish -p velesdb-server || echo "velesdb-server already published"
 
   # ===========================================================================
   # Signature des binaires (désactivé par défaut)
