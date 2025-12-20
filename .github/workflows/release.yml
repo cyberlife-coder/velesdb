@@ -86,11 +86,12 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact_name: velesdb-linux-x86_64
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            artifact_name: velesdb-macos-x86_64
+          # macOS x86_64 désactivé - anndists utilise AVX2 (incompatible cross-compile)
+          # - target: x86_64-apple-darwin
+          #   os: macos-13  # Intel runner pour x86_64
+          #   artifact_name: velesdb-macos-x86_64
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-latest  # ARM runner (M1/M2)
             artifact_name: velesdb-macos-aarch64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
@@ -161,12 +162,27 @@ jobs:
           cargo publish --allow-dirty || echo "Package already published or error"
 
   # ===========================================================================
+  # Signature des binaires (désactivé par défaut)
+  # ===========================================================================
+  sign-release:
+    name: Sign Release Binaries
+    needs: [validate, build-release]
+    # ⚠️ DÉSACTIVÉ - Décommenter quand les certificats sont configurés
+    if: false
+    uses: ./.github/workflows/code-signing.yml
+    with:
+      dry_run: 'false'
+    secrets: inherit
+
+  # ===========================================================================
   # Création de la release GitHub
   # ===========================================================================
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [validate, build-release]
+    # Ajouter sign-release aux needs quand activé:
+    # needs: [validate, build-release, sign-release]
     permissions:
       contents: write
     steps:
