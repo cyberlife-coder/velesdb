@@ -30,30 +30,33 @@
 
 name: Code Signing
 
-# ⚠️ WORKFLOW DÉSACTIVÉ - Décommenter pour activer
-# on:
-#   workflow_call:
-#     inputs:
-#       version:
-#         required: true
-#         type: string
-#     secrets:
-#       WINDOWS_SIGNING_CERT_BASE64:
-#         required: false
-#       WINDOWS_SIGNING_CERT_PASSWORD:
-#         required: false
-#       APPLE_CERTIFICATE_BASE64:
-#         required: false
-#       APPLE_CERTIFICATE_PASSWORD:
-#         required: false
-#       APPLE_ID:
-#         required: false
-#       APPLE_ID_PASSWORD:
-#         required: false
-#       APPLE_TEAM_ID:
-#         required: false
-
 on:
+  # Appelé par release.yml
+  workflow_call:
+    inputs:
+      dry_run:
+        required: false
+        type: string
+        default: 'false'
+    secrets:
+      WINDOWS_SIGNING_CERT_BASE64:
+        required: false
+      WINDOWS_SIGNING_CERT_PASSWORD:
+        required: false
+      APPLE_CERTIFICATE_BASE64:
+        required: false
+      APPLE_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_ID_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      APPLE_DEVELOPER_ID_APPLICATION:
+        required: false
+
+  # Test manuel
   workflow_dispatch:
     inputs:
       dry_run:
