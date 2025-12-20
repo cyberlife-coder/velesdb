@@ -1,4 +1,5 @@
 #![allow(clippy::useless_conversion)]
+#![allow(deprecated)] // PyO3 0.24 deprecation warnings - will migrate to IntoPyObject in future
 //! Python bindings for VelesDB vector database.
 //!
 //! This module provides a Pythonic interface to VelesDB using PyO3.
