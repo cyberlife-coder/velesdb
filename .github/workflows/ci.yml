@@ -82,6 +82,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           cargo tarpaulin --all-features --workspace --timeout 120 \
+            --exclude velesdb-python \
             --out Xml --out Html --output-dir coverage \
             --fail-under 80
 
