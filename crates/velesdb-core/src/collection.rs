@@ -827,4 +827,166 @@ mod tests {
         assert!(text.contains("rust"));
         assert!(text.contains("fast"));
     }
+
+    #[test]
+    fn test_text_search_empty_query() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        let points = vec![Point::new(
+            1,
+            vec![1.0, 0.0, 0.0],
+            Some(json!({"content": "test document"})),
+        )];
+        collection.upsert(points).unwrap();
+
+        // Empty query should return empty results
+        let results = collection.text_search("", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_text_search_no_payload() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        // Points without payload
+        let points = vec![
+            Point::new(1, vec![1.0, 0.0, 0.0], None),
+            Point::new(2, vec![0.0, 1.0, 0.0], None),
+        ];
+        collection.upsert(points).unwrap();
+
+        // Text search should return empty (no text indexed)
+        let results = collection.text_search("test", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_hybrid_search_text_weight_zero() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        let points = vec![
+            Point::new(1, vec![1.0, 0.0, 0.0], Some(json!({"title": "Rust"}))),
+            Point::new(2, vec![0.9, 0.1, 0.0], Some(json!({"title": "Python"}))),
+        ];
+        collection.upsert(points).unwrap();
+
+        // vector_weight=1.0 means text_weight=0.0 (pure vector search)
+        let query = vec![0.9, 0.1, 0.0];
+        let results = collection
+            .hybrid_search(&query, "rust", 2, Some(1.0))
+            .unwrap();
+
+        // Doc 2 should be first (closest vector) even though "rust" matches doc 1
+        assert_eq!(results[0].point.id, 2);
+    }
+
+    #[test]
+    fn test_hybrid_search_vector_weight_zero() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        let points = vec![
+            Point::new(
+                1,
+                vec![1.0, 0.0, 0.0],
+                Some(json!({"title": "Rust programming language"})),
+            ),
+            Point::new(
+                2,
+                vec![0.99, 0.01, 0.0], // Very close to query vector
+                Some(json!({"title": "Python programming"})),
+            ),
+        ];
+        collection.upsert(points).unwrap();
+
+        // vector_weight=0.0 means text_weight=1.0 (pure text search)
+        let query = vec![0.99, 0.01, 0.0];
+        let results = collection
+            .hybrid_search(&query, "rust", 2, Some(0.0))
+            .unwrap();
+
+        // Doc 1 should be first (matches "rust") even though doc 2 has closer vector
+        assert_eq!(results[0].point.id, 1);
+    }
+
+    #[test]
+    fn test_bm25_update_document() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 3, DistanceMetric::Cosine).unwrap();
+
+        // Insert initial document
+        let points = vec![Point::new(
+            1,
+            vec![1.0, 0.0, 0.0],
+            Some(json!({"content": "rust programming"})),
+        )];
+        collection.upsert(points).unwrap();
+
+        // Verify it's indexed
+        let results = collection.text_search("rust", 10);
+        assert_eq!(results.len(), 1);
+
+        // Update document with different text
+        let points = vec![Point::new(
+            1,
+            vec![1.0, 0.0, 0.0],
+            Some(json!({"content": "python programming"})),
+        )];
+        collection.upsert(points).unwrap();
+
+        // Should no longer match "rust"
+        let results = collection.text_search("rust", 10);
+        assert!(results.is_empty());
+
+        // Should now match "python"
+        let results = collection.text_search("python", 10);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_bm25_large_dataset() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_collection");
+
+        let collection = Collection::create(path, 4, DistanceMetric::Cosine).unwrap();
+
+        // Insert 100 documents
+        let points: Vec<Point> = (0..100)
+            .map(|i| {
+                let content = if i % 10 == 0 {
+                    format!("rust document number {i}")
+                } else {
+                    format!("other document number {i}")
+                };
+                Point::new(
+                    i,
+                    vec![0.1, 0.2, 0.3, 0.4],
+                    Some(json!({"content": content})),
+                )
+            })
+            .collect();
+        collection.upsert(points).unwrap();
+
+        // Search for "rust" - should find 10 documents (0, 10, 20, ..., 90)
+        let results = collection.text_search("rust", 100);
+        assert_eq!(results.len(), 10);
+
+        // All results should have IDs divisible by 10
+        for result in &results {
+            assert_eq!(result.point.id % 10, 0);
+        }
+    }
 }
