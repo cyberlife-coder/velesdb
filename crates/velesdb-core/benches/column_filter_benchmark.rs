@@ -4,6 +4,9 @@
 //!
 //! # WIS-46: Column Store Performance Validation
 
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_wrap)]
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use serde_json::{json, Value};
 use velesdb_core::column_store::{ColumnStore, ColumnType, ColumnValue};
@@ -63,7 +66,7 @@ fn generate_column_store(count: usize) -> ColumnStore {
 fn bench_filter_eq_string(c: &mut Criterion) {
     let mut group = c.benchmark_group("filter_eq_string");
 
-    for count in [1_000, 10_000, 100_000].iter() {
+    for count in &[1_000, 10_000, 100_000] {
         let payloads = generate_json_payloads(*count);
         let store = generate_column_store(*count);
         let filter = Filter::new(Condition::eq("category", "tech"));
@@ -98,7 +101,7 @@ fn bench_filter_eq_string(c: &mut Criterion) {
 fn bench_filter_eq_int(c: &mut Criterion) {
     let mut group = c.benchmark_group("filter_eq_int");
 
-    for count in [1_000, 10_000, 100_000].iter() {
+    for count in &[1_000, 10_000, 100_000] {
         let payloads = generate_json_payloads(*count);
         let store = generate_column_store(*count);
         let filter = Filter::new(Condition::eq("price", 500));
@@ -137,7 +140,7 @@ fn bench_filter_eq_int(c: &mut Criterion) {
 fn bench_filter_range_int(c: &mut Criterion) {
     let mut group = c.benchmark_group("filter_range_int");
 
-    for count in [1_000, 10_000, 100_000].iter() {
+    for count in &[1_000, 10_000, 100_000] {
         let payloads = generate_json_payloads(*count);
         let store = generate_column_store(*count);
 
@@ -182,7 +185,7 @@ fn bench_filter_range_int(c: &mut Criterion) {
 fn bench_filter_in_string(c: &mut Criterion) {
     let mut group = c.benchmark_group("filter_in_string");
 
-    for count in [1_000, 10_000, 100_000].iter() {
+    for count in &[1_000, 10_000, 100_000] {
         let payloads = generate_json_payloads(*count);
         let store = generate_column_store(*count);
 
@@ -227,7 +230,7 @@ fn bench_throughput_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput_scaling");
     group.sample_size(50);
 
-    for count in [1_000, 10_000, 100_000, 500_000].iter() {
+    for count in &[1_000, 10_000, 100_000, 500_000] {
         let payloads = generate_json_payloads(*count);
         let store = generate_column_store(*count);
         let filter = Filter::new(Condition::eq("category", "tech"));
@@ -257,7 +260,7 @@ fn bench_bitmap_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("bitmap_scaling");
     group.sample_size(50);
 
-    for count in [10_000, 100_000, 500_000].iter() {
+    for count in &[10_000, 100_000, 500_000] {
         let store = generate_column_store(*count);
 
         group.bench_with_input(

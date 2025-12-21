@@ -2,6 +2,9 @@
 //!
 //! Run with: `cargo bench --bench simd_benchmark`
 
+#![allow(clippy::similar_names)]
+#![allow(clippy::cast_precision_loss)]
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use velesdb_core::simd::{
     cosine_similarity_fast, dot_product_fast, euclidean_distance_fast, hamming_distance_fast,
@@ -19,7 +22,7 @@ fn generate_vector(dim: usize, seed: f32) -> Vec<f32> {
 fn bench_dot_product(c: &mut Criterion) {
     let mut group = c.benchmark_group("dot_product");
 
-    for dim in [128, 384, 768, 1536].iter() {
+    for dim in &[128, 384, 768, 1536] {
         let a = generate_vector(*dim, 0.0);
         let b = generate_vector(*dim, 1.0);
 
@@ -38,7 +41,7 @@ fn bench_dot_product(c: &mut Criterion) {
 fn bench_euclidean_distance(c: &mut Criterion) {
     let mut group = c.benchmark_group("euclidean_distance");
 
-    for dim in [128, 384, 768, 1536].iter() {
+    for dim in &[128, 384, 768, 1536] {
         let a = generate_vector(*dim, 0.0);
         let b = generate_vector(*dim, 1.0);
 
@@ -57,7 +60,7 @@ fn bench_euclidean_distance(c: &mut Criterion) {
 fn bench_cosine_similarity(c: &mut Criterion) {
     let mut group = c.benchmark_group("cosine_similarity");
 
-    for dim in [128, 384, 768, 1536].iter() {
+    for dim in &[128, 384, 768, 1536] {
         let a = generate_vector(*dim, 0.0);
         let b = generate_vector(*dim, 1.0);
 
@@ -88,7 +91,7 @@ fn generate_packed_binary(num_u64: usize, seed: u64) -> Vec<u64> {
 fn bench_hamming_f32(c: &mut Criterion) {
     let mut group = c.benchmark_group("hamming_f32");
 
-    for dim in [128, 384, 768, 1536].iter() {
+    for dim in &[128, 384, 768, 1536] {
         let a = generate_binary_vector(*dim, 0);
         let b = generate_binary_vector(*dim, 1);
 
@@ -109,7 +112,7 @@ fn bench_hamming_binary(c: &mut Criterion) {
 
     // Compare f32 Hamming vs packed binary with POPCNT
     // 768 f32 elements = 768 bits = 12 u64s
-    for (f32_dim, u64_count) in [(128, 2), (384, 6), (768, 12), (1536, 24)].iter() {
+    for (f32_dim, u64_count) in &[(128, 2), (384, 6), (768, 12), (1536, 24)] {
         let a_f32 = generate_binary_vector(*f32_dim, 0);
         let b_f32 = generate_binary_vector(*f32_dim, 1);
         let a_u64 = generate_packed_binary(*u64_count, 0x1234_5678);
