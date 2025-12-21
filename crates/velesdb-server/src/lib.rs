@@ -8,6 +8,7 @@
 #![allow(clippy::map_unwrap_or)]
 #![allow(clippy::enum_glob_use)]
 #![allow(clippy::unused_async)]
+#![allow(clippy::needless_for_each)] // Required for utoipa OpenApi derive macro
 //! `VelesDB` Server - REST API library for the `VelesDB` vector database.
 //!
 //! This module provides the HTTP handlers and types for the `VelesDB` REST API.

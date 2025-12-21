@@ -120,7 +120,7 @@ fn bench_dimension_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("dimension_scaling");
 
     // Test common embedding dimensions
-    for dim in [64, 128, 256, 384, 512, 768, 1024, 1536, 3072].iter() {
+    for dim in &[64, 128, 256, 384, 512, 768, 1024, 1536, 3072] {
         let a = generate_aligned_vector(*dim, 0.0);
         let b = generate_aligned_vector(*dim, 1.0);
 
