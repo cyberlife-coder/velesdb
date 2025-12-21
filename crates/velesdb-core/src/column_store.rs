@@ -20,6 +20,7 @@
 //! └── string_table: StringTable (interning for strings)
 //! ```
 
+use roaring::RoaringBitmap;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
@@ -407,6 +408,90 @@ impl ColumnStore {
         };
 
         col.iter().filter(|v| **v == Some(string_id)).count()
+    }
+
+    // =========================================================================
+    // Optimized Bitmap-based Filtering (for 100k+ items)
+    // =========================================================================
+
+    /// Filters rows by equality on an integer column, returning a bitmap.
+    ///
+    /// Uses `RoaringBitmap` for memory-efficient storage of matching indices.
+    /// Useful for combining multiple filters with AND/OR operations.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn filter_eq_int_bitmap(&self, column: &str, value: i64) -> RoaringBitmap {
+        let Some(TypedColumn::Int(col)) = self.columns.get(column) else {
+            return RoaringBitmap::new();
+        };
+
+        col.iter()
+            .enumerate()
+            .filter_map(|(idx, v)| {
+                if *v == Some(value) {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Filters rows by equality on a string column, returning a bitmap.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn filter_eq_string_bitmap(&self, column: &str, value: &str) -> RoaringBitmap {
+        let Some(TypedColumn::String(col)) = self.columns.get(column) else {
+            return RoaringBitmap::new();
+        };
+
+        let Some(string_id) = self.string_table.get_id(value) else {
+            return RoaringBitmap::new();
+        };
+
+        col.iter()
+            .enumerate()
+            .filter_map(|(idx, v)| {
+                if *v == Some(string_id) {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Filters rows by range on an integer column, returning a bitmap.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn filter_range_int_bitmap(&self, column: &str, low: i64, high: i64) -> RoaringBitmap {
+        let Some(TypedColumn::Int(col)) = self.columns.get(column) else {
+            return RoaringBitmap::new();
+        };
+
+        col.iter()
+            .enumerate()
+            .filter_map(|(idx, v)| match v {
+                Some(val) if *val > low && *val < high => Some(idx as u32),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Combines two filter results using AND.
+    ///
+    /// Returns indices that are in both bitmaps.
+    #[must_use]
+    pub fn bitmap_and(a: &RoaringBitmap, b: &RoaringBitmap) -> RoaringBitmap {
+        a & b
+    }
+
+    /// Combines two filter results using OR.
+    ///
+    /// Returns indices that are in either bitmap.
+    #[must_use]
+    pub fn bitmap_or(a: &RoaringBitmap, b: &RoaringBitmap) -> RoaringBitmap {
+        a | b
     }
 }
 
