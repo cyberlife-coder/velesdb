@@ -253,12 +253,47 @@ fn bench_throughput_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_bitmap_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitmap_scaling");
+    group.sample_size(50);
+
+    for count in [10_000, 100_000, 500_000].iter() {
+        let store = generate_column_store(*count);
+
+        group.bench_with_input(
+            BenchmarkId::new("filter_vec", count),
+            count,
+            |bencher, _| {
+                bencher.iter(|| {
+                    let matches = store.filter_eq_string(black_box("category"), black_box("tech"));
+                    black_box(matches.len())
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("filter_bitmap", count),
+            count,
+            |bencher, _| {
+                bencher.iter(|| {
+                    let bitmap =
+                        store.filter_eq_string_bitmap(black_box("category"), black_box("tech"));
+                    black_box(bitmap.len())
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_filter_eq_string,
     bench_filter_eq_int,
     bench_filter_range_int,
     bench_filter_in_string,
-    bench_throughput_scaling
+    bench_throughput_scaling,
+    bench_bitmap_scaling
 );
 criterion_main!(benches);

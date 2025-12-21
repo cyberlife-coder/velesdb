@@ -86,7 +86,7 @@ Benchmarks for filtering operations.
 | 10,000 items | 151 µs | **66.2 M/s** |
 | 100,000 items | 5.15 ms | **19.4 M/s** |
 
-> **Note**: Throughput drops significantly at 100k items, likely due to cache locality issues in the current linear scan implementation.
+> **Note**: For high-performance filtering at scale, use the new `ColumnStore` module which provides 44-122x faster filtering than JSON. See `column_store.rs` for bitmap-based filtering that supports efficient AND/OR combinations.
 
 ---
 
