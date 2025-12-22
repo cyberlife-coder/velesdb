@@ -1,0 +1,301 @@
+/**
+ * REST Backend for VelesDB
+ * 
+ * Connects to VelesDB server via REST API
+ */
+
+import type {
+  IVelesDBBackend,
+  CollectionConfig,
+  Collection,
+  VectorDocument,
+  SearchOptions,
+  SearchResult,
+} from '../types';
+import { ConnectionError, NotFoundError, VelesDBError } from '../types';
+
+/** REST API response wrapper */
+interface ApiResponse<T> {
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
+ * REST Backend
+ * 
+ * Provides vector storage via VelesDB REST API server.
+ */
+export class RestBackend implements IVelesDBBackend {
+  private readonly baseUrl: string;
+  private readonly apiKey?: string;
+  private readonly timeout: number;
+  private _initialized = false;
+
+  constructor(url: string, apiKey?: string, timeout = 30000) {
+    this.baseUrl = url.replace(/\/$/, ''); // Remove trailing slash
+    this.apiKey = apiKey;
+    this.timeout = timeout;
+  }
+
+  async init(): Promise<void> {
+    if (this._initialized) {
+      return;
+    }
+
+    try {
+      // Health check
+      const response = await this.request<{ status: string }>('GET', '/health');
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      this._initialized = true;
+    } catch (error) {
+      throw new ConnectionError(
+        `Failed to connect to VelesDB server at ${this.baseUrl}`,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  isInitialized(): boolean {
+    return this._initialized;
+  }
+
+  private ensureInitialized(): void {
+    if (!this._initialized) {
+      throw new ConnectionError('REST backend not initialized');
+    }
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${path}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          error: {
+            code: data.code ?? 'UNKNOWN_ERROR',
+            message: data.message ?? `HTTP ${response.status}`,
+          },
+        };
+      }
+
+      return { data };
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ConnectionError('Request timeout');
+      }
+
+      throw new ConnectionError(
+        `Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  async createCollection(name: string, config: CollectionConfig): Promise<void> {
+    this.ensureInitialized();
+
+    const response = await this.request('POST', '/collections', {
+      name,
+      dimension: config.dimension,
+      metric: config.metric ?? 'cosine',
+      description: config.description,
+    });
+
+    if (response.error) {
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+  }
+
+  async deleteCollection(name: string): Promise<void> {
+    this.ensureInitialized();
+
+    const response = await this.request('DELETE', `/collections/${encodeURIComponent(name)}`);
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        throw new NotFoundError(`Collection '${name}'`);
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+  }
+
+  async getCollection(name: string): Promise<Collection | null> {
+    this.ensureInitialized();
+
+    const response = await this.request<Collection>(
+      'GET',
+      `/collections/${encodeURIComponent(name)}`
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        return null;
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+
+    return response.data ?? null;
+  }
+
+  async listCollections(): Promise<Collection[]> {
+    this.ensureInitialized();
+
+    const response = await this.request<Collection[]>('GET', '/collections');
+
+    if (response.error) {
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+
+    return response.data ?? [];
+  }
+
+  async insert(collection: string, doc: VectorDocument): Promise<void> {
+    this.ensureInitialized();
+
+    const vector = doc.vector instanceof Float32Array 
+      ? Array.from(doc.vector) 
+      : doc.vector;
+
+    const response = await this.request(
+      'POST',
+      `/collections/${encodeURIComponent(collection)}/vectors`,
+      {
+        id: doc.id,
+        vector,
+        payload: doc.payload,
+      }
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        throw new NotFoundError(`Collection '${collection}'`);
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+  }
+
+  async insertBatch(collection: string, docs: VectorDocument[]): Promise<void> {
+    this.ensureInitialized();
+
+    const vectors = docs.map(doc => ({
+      id: doc.id,
+      vector: doc.vector instanceof Float32Array ? Array.from(doc.vector) : doc.vector,
+      payload: doc.payload,
+    }));
+
+    const response = await this.request(
+      'POST',
+      `/collections/${encodeURIComponent(collection)}/vectors/batch`,
+      { vectors }
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        throw new NotFoundError(`Collection '${collection}'`);
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+  }
+
+  async search(
+    collection: string,
+    query: number[] | Float32Array,
+    options?: SearchOptions
+  ): Promise<SearchResult[]> {
+    this.ensureInitialized();
+
+    const queryVector = query instanceof Float32Array ? Array.from(query) : query;
+
+    const response = await this.request<SearchResult[]>(
+      'POST',
+      `/collections/${encodeURIComponent(collection)}/search`,
+      {
+        vector: queryVector,
+        k: options?.k ?? 10,
+        filter: options?.filter,
+        include_vectors: options?.includeVectors ?? false,
+      }
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        throw new NotFoundError(`Collection '${collection}'`);
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+
+    return response.data ?? [];
+  }
+
+  async delete(collection: string, id: string | number): Promise<boolean> {
+    this.ensureInitialized();
+
+    const response = await this.request<{ deleted: boolean }>(
+      'DELETE',
+      `/collections/${encodeURIComponent(collection)}/vectors/${encodeURIComponent(String(id))}`
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        return false;
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+
+    return response.data?.deleted ?? false;
+  }
+
+  async get(collection: string, id: string | number): Promise<VectorDocument | null> {
+    this.ensureInitialized();
+
+    const response = await this.request<VectorDocument>(
+      'GET',
+      `/collections/${encodeURIComponent(collection)}/vectors/${encodeURIComponent(String(id))}`
+    );
+
+    if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        return null;
+      }
+      throw new VelesDBError(response.error.message, response.error.code);
+    }
+
+    return response.data ?? null;
+  }
+
+  async close(): Promise<void> {
+    this._initialized = false;
+  }
+}
