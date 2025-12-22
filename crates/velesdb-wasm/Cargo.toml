@@ -26,6 +26,11 @@ features = ["console"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+serde-wasm-bindgen = "0.6"
+
+[[test]]
+name = "wasm_bench"
+path = "benches/wasm_bench.rs"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
