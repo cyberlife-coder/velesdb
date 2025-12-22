@@ -130,7 +130,7 @@
                 for (let j = 0; j < dims; j++) {
                     vector[j] = Math.random() * 2 - 1;
                 }
-                store.insert(i, vector);
+                store.insert(BigInt(i), vector);
             }
 
             const elapsed = performance.now() - startTime;
@@ -174,7 +174,7 @@
                 const [id, score] = result;
                 html += `<tr class="border-t border-gray-700">
                     <td class="py-2 text-purple-400">#${index + 1}</td>
-                    <td class="py-2">${id}</td>
+                    <td class="py-2">${id.toString()}</td>
                     <td class="py-2 text-green-400">${score.toFixed(6)}</td>
                 </tr>`;
             });
