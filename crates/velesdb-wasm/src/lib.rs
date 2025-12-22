@@ -286,6 +286,155 @@ impl VectorStore {
 
         Ok(())
     }
+
+    /// Exports the vector store to a binary format.
+    ///
+    /// The binary format contains:
+    /// - Header: dimension (u32), metric (u8), count (u64)
+    /// - For each vector: id (u64), data (f32 array)
+    ///
+    /// Use this to persist data to `IndexedDB` or `localStorage`.
+    ///
+    /// # Errors
+    ///
+    /// This function currently does not return errors but uses `Result`
+    /// for future extensibility.
+    #[wasm_bindgen]
+    pub fn export_to_bytes(&self) -> Result<Vec<u8>, JsValue> {
+        let mut bytes = Vec::new();
+
+        // Header: magic number "VELS" (4 bytes)
+        bytes.extend_from_slice(b"VELS");
+
+        // Version (1 byte)
+        bytes.push(1);
+
+        // Dimension (4 bytes, little-endian)
+        #[allow(clippy::cast_possible_truncation)]
+        let dim_u32 = self.dimension as u32;
+        bytes.extend_from_slice(&dim_u32.to_le_bytes());
+
+        // Metric (1 byte: 0=cosine, 1=euclidean, 2=dot)
+        let metric_byte = match self.metric {
+            DistanceMetric::Cosine => 0u8,
+            DistanceMetric::Euclidean => 1u8,
+            DistanceMetric::DotProduct => 2u8,
+        };
+        bytes.push(metric_byte);
+
+        // Vector count (8 bytes, little-endian)
+        #[allow(clippy::cast_possible_truncation)]
+        let count_u64 = self.vectors.len() as u64;
+        bytes.extend_from_slice(&count_u64.to_le_bytes());
+
+        // Each vector: id (8 bytes) + data (dimension * 4 bytes)
+        for vector in &self.vectors {
+            bytes.extend_from_slice(&vector.id.to_le_bytes());
+            for &val in &vector.data {
+                bytes.extend_from_slice(&val.to_le_bytes());
+            }
+        }
+
+        Ok(bytes)
+    }
+
+    /// Imports a vector store from binary format.
+    ///
+    /// Use this to restore data from `IndexedDB` or `localStorage`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The data is too short or corrupted
+    /// - The magic number is invalid
+    /// - The version is unsupported
+    /// - The metric byte is invalid
+    #[wasm_bindgen]
+    pub fn import_from_bytes(bytes: &[u8]) -> Result<VectorStore, JsValue> {
+        if bytes.len() < 18 {
+            return Err(JsValue::from_str("Invalid data: too short"));
+        }
+
+        // Check magic number
+        if &bytes[0..4] != b"VELS" {
+            return Err(JsValue::from_str("Invalid data: wrong magic number"));
+        }
+
+        // Check version
+        let version = bytes[4];
+        if version != 1 {
+            return Err(JsValue::from_str(&format!(
+                "Unsupported version: {version}"
+            )));
+        }
+
+        // Read dimension
+        let dimension = u32::from_le_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]) as usize;
+
+        // Read metric
+        let metric = match bytes[9] {
+            0 => DistanceMetric::Cosine,
+            1 => DistanceMetric::Euclidean,
+            2 => DistanceMetric::DotProduct,
+            _ => return Err(JsValue::from_str("Invalid metric byte")),
+        };
+
+        // Read vector count
+        #[allow(clippy::cast_possible_truncation)]
+        let count = u64::from_le_bytes([
+            bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15], bytes[16], bytes[17],
+        ]) as usize;
+
+        // Calculate expected size
+        let vector_size = 8 + dimension * 4; // id + data
+        let expected_size = 18 + count * vector_size;
+        if bytes.len() < expected_size {
+            return Err(JsValue::from_str(&format!(
+                "Invalid data: expected {expected_size} bytes, got {}",
+                bytes.len()
+            )));
+        }
+
+        // Read vectors
+        let mut vectors = Vec::with_capacity(count);
+        let mut offset = 18;
+
+        for _ in 0..count {
+            // Read id
+            let id = u64::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+                bytes[offset + 4],
+                bytes[offset + 5],
+                bytes[offset + 6],
+                bytes[offset + 7],
+            ]);
+            offset += 8;
+
+            // Read vector data
+            let mut data = Vec::with_capacity(dimension);
+            for _ in 0..dimension {
+                let val = f32::from_le_bytes([
+                    bytes[offset],
+                    bytes[offset + 1],
+                    bytes[offset + 2],
+                    bytes[offset + 3],
+                ]);
+                data.push(val);
+                offset += 4;
+            }
+
+            vectors.push(StoredVector { id, data });
+        }
+
+        Ok(Self {
+            vectors,
+            dimension,
+            metric,
+        })
+    }
 }
 
 /// Search result containing ID and score.
