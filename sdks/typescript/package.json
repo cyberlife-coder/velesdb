@@ -1,0 +1,71 @@
+{
+  "name": "@velesdb/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for VelesDB - Vector Search in Microseconds",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "velesdb",
+    "vector",
+    "database",
+    "similarity-search",
+    "embeddings",
+    "ai",
+    "machine-learning",
+    "wasm",
+    "typescript"
+  ],
+  "author": "Wiscale France",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyberlife-coder/VelesDB.git",
+    "directory": "sdks/typescript"
+  },
+  "homepage": "https://github.com/cyberlife-coder/VelesDB#readme",
+  "bugs": {
+    "url": "https://github.com/cyberlife-coder/VelesDB/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "velesdb-wasm": "^0.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
