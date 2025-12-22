@@ -219,57 +219,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.5] - 2025-12-22
+## [0.2.0] - 2025-12-22
 
 ### Added
 
-#### BM25 Full-Text Search
-- **Text Search API**: `POST /collections/{name}/search/text`
-  - BM25 ranking algorithm for full-text search
-  - Automatic text extraction from JSON payloads
-  - Configurable `top_k` results
+#### BM25 Full-Text Search (WIS-55)
+- **`Bm25Index`**: Full-text search with BM25 ranking algorithm
+  - Tokenization with stopword removal
+  - Term frequency / inverse document frequency scoring
+  - Persistent storage with automatic recovery
+  - 15+ TDD tests
 
-- **Hybrid Search API**: `POST /collections/{name}/search/hybrid`
-  - Combines vector similarity + BM25 text relevance
-  - Reciprocal Rank Fusion (RRF) for score fusion
-  - Configurable `vector_weight` parameter
+- **`Collection::text_search()`**: Search by text content
+- **`Collection::hybrid_search()`**: Combined vector + BM25 with RRF fusion
+  - Configurable `vector_weight` parameter (0.0-1.0)
+  - Reciprocal Rank Fusion for result merging
 
-#### VelesQL MATCH Clause
-- **Full-text search in VelesQL**:
+- **VelesQL MATCH clause**:
   ```sql
-  -- Text search only
-  SELECT * FROM docs WHERE content MATCH 'rust programming' LIMIT 10
-  
-  -- Hybrid search (vector + text)
-  SELECT * FROM docs WHERE vector NEAR $v AND content MATCH 'rust' LIMIT 10
+  SELECT * FROM documents 
+  WHERE content MATCH 'rust programming'
+  LIMIT 10
   ```
 
-#### BM25 Persistence
-- **Automatic index rebuild**: BM25 index is rebuilt from persisted payloads on collection open
-- Added `ids()` method to `PayloadStorage` trait
+- **REST API Endpoints**:
+  - `POST /collections/{name}/search/text` - BM25 text search
+  - `POST /collections/{name}/search/hybrid` - Hybrid search
+
+#### Tauri Desktop Plugin (WIS-67)
+- **`tauri-plugin-velesdb`**: Vector search in desktop applications
+  - Full Tauri v2 compatibility
+  - 9 commands: CRUD, search, text_search, hybrid_search, query
+  - TypeScript bindings with full type definitions
+  - Auto-generated Tauri permissions
+  - 26 TDD tests
+
+- **Commands**:
+  | Command | Description |
+  |---------|-------------|
+  | `create_collection` | Create vector collection |
+  | `delete_collection` | Delete collection |
+  | `list_collections` | List all collections |
+  | `get_collection` | Get collection info |
+  | `upsert` | Insert/update vectors |
+  | `search` | Vector similarity search |
+  | `text_search` | BM25 full-text search |
+  | `hybrid_search` | Vector + text fusion |
+  | `query` | Execute VelesQL |
+
+- **JavaScript API**:
+  ```javascript
+  import { invoke } from '@tauri-apps/api/core';
+  
+  await invoke('plugin:velesdb|search', {
+    request: { collection: 'docs', vector: [...], topK: 10 }
+  });
+  ```
 
 ### Performance
 
-| Operation | Metric | Value |
-|-----------|--------|-------|
-| BM25 Search (10k docs) | Latency | < 5ms |
-| Hybrid Search | RRF Fusion | O(n log k) |
-| Text Indexing | Per document | ~10 µs |
+| Operation | Latency | Throughput |
+|-----------|---------|------------|
+| Text search (10k docs) | < 5ms | 200 q/s |
+| Hybrid search | < 10ms | 100 q/s |
+| Tauri vector search | < 1ms | 1000 q/s |
 
 ### Testing
 
-- **348 tests** total (333 core + 14 server + 1 WASM)
-- New integration tests for text/hybrid search endpoints
-- TDD approach with tests written before implementation
+- **374 tests** total (+48 from v0.1.4)
+  - 333 core engine tests
+  - 26 Tauri plugin tests
+  - 6 REST API tests
+  - 9 WASM tests
 
 ---
 
 ## [Unreleased]
 
 ### Planned
-- LlamaIndex integration
-- Prometheus /metrics endpoint (WIS-49)
-- EXPLAIN query plans
+- LlamaIndex integration (WIS-66)
+- Prometheus /metrics endpoint (WIS-63)
+- Product Quantization (WIS-65)
+- Multi-tenancy (WIS-68)
+- API Authentication (WIS-69)
 
 [0.1.4]: https://github.com/cyberlife-coder/VelesDB/releases/tag/v0.1.4
 [0.2.0]: https://github.com/cyberlife-coder/VelesDB/releases/tag/v0.2.0
