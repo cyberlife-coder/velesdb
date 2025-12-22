@@ -910,89 +910,31 @@ pub async fn query(
 
     // Execute appropriate search based on conditions
     let results = match (vector_search, match_condition_opt) {
-        // Hybrid search: NEAR + MATCH
         (Some(vs), Some(match_cond)) => {
-            let query_vector = match &vs.vector {
-                VectorExpr::Literal(v) => v.clone(),
-                VectorExpr::Parameter(param_name) => match req.params.get(param_name) {
-                    Some(serde_json::Value::Array(arr)) => arr
-                        .iter()
-                        .filter_map(|v| v.as_f64().map(|f| f as f32))
-                        .collect(),
-                    _ => {
-                        return (
-                            StatusCode::BAD_REQUEST,
-                            Json(ErrorResponse {
-                                error: format!("Missing or invalid parameter: ${}", param_name),
-                            }),
-                        )
-                            .into_response()
-                    }
-                },
+            let query_vector = match resolve_vector(&vs.vector, &req.params) {
+                Ok(v) => v,
+                Err(e) => return bad_request_response(&e),
             };
-
             match collection.hybrid_search(&query_vector, &match_cond.query, limit, Some(0.5)) {
                 Ok(r) => r,
-                Err(e) => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: e.to_string(),
-                        }),
-                    )
-                        .into_response()
-                }
+                Err(e) => return bad_request_response(&e.to_string()),
             }
         }
-
-        // Vector search only: NEAR
         (Some(vs), None) => {
-            let query_vector = match &vs.vector {
-                VectorExpr::Literal(v) => v.clone(),
-                VectorExpr::Parameter(param_name) => match req.params.get(param_name) {
-                    Some(serde_json::Value::Array(arr)) => arr
-                        .iter()
-                        .filter_map(|v| v.as_f64().map(|f| f as f32))
-                        .collect(),
-                    _ => {
-                        return (
-                            StatusCode::BAD_REQUEST,
-                            Json(ErrorResponse {
-                                error: format!("Missing or invalid parameter: ${}", param_name),
-                            }),
-                        )
-                            .into_response()
-                    }
-                },
+            let query_vector = match resolve_vector(&vs.vector, &req.params) {
+                Ok(v) => v,
+                Err(e) => return bad_request_response(&e),
             };
-
             match collection.search(&query_vector, limit) {
                 Ok(r) => r,
-                Err(e) => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: e.to_string(),
-                        }),
-                    )
-                        .into_response()
-                }
+                Err(e) => return bad_request_response(&e.to_string()),
             }
         }
-
-        // Text search only: MATCH
         (None, Some(match_cond)) => collection.text_search(&match_cond.query, limit),
-
-        // No search condition
         (None, None) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "VelesQL queries require a search condition (NEAR or MATCH clause)"
-                        .to_string(),
-                }),
-            )
-                .into_response();
+            return bad_request_response(
+                "VelesQL queries require a search condition (NEAR or MATCH clause)",
+            );
         }
     };
 
@@ -1022,6 +964,34 @@ pub async fn query(
         rows_returned,
     })
     .into_response()
+}
+
+/// Helper to create a BAD_REQUEST error response.
+fn bad_request_response(error: &str) -> axum::response::Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse {
+            error: error.to_string(),
+        }),
+    )
+        .into_response()
+}
+
+/// Resolve a vector from VectorExpr using query parameters.
+fn resolve_vector(
+    vector_expr: &VectorExpr,
+    params: &std::collections::HashMap<String, serde_json::Value>,
+) -> Result<Vec<f32>, String> {
+    match vector_expr {
+        VectorExpr::Literal(v) => Ok(v.clone()),
+        VectorExpr::Parameter(param_name) => match params.get(param_name) {
+            Some(serde_json::Value::Array(arr)) => Ok(arr
+                .iter()
+                .filter_map(|v| v.as_f64().map(|f| f as f32))
+                .collect()),
+            _ => Err(format!("Missing or invalid parameter: ${param_name}")),
+        },
+    }
 }
 
 /// Extract vector search from a condition tree.
