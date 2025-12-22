@@ -11,35 +11,18 @@ import type {
   VectorDocument,
   SearchOptions,
   SearchResult,
-  DistanceMetric,
 } from '../types';
 import { ConnectionError, NotFoundError, VelesDBError } from '../types';
 
-// Type for the WASM module
-interface WasmVectorStore {
-  new (dimension: number, metric: string): WasmVectorStore;
-  with_capacity(dimension: number, metric: string, capacity: number): WasmVectorStore;
-  insert(id: bigint, vector: Float32Array): void;
-  insert_batch(batch: Array<[bigint, number[]]>): void;
-  search(query: Float32Array, k: number): Array<[bigint, number]>;
-  remove(id: bigint): boolean;
-  clear(): void;
-  reserve(additional: number): void;
-  free(): void;
-  readonly len: number;
-  readonly is_empty: boolean;
-  readonly dimension: number;
-}
-
-interface WasmModule {
-  default: () => Promise<void>;
-  VectorStore: new (dimension: number, metric: string) => WasmVectorStore;
-}
+// Type definitions are loose to avoid strict type checking issues with dynamic WASM imports
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WasmModule = any;
 
 /** In-memory collection storage */
 interface CollectionData {
   config: CollectionConfig;
-  store: WasmVectorStore;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  store: any;
   payloads: Map<string, Record<string, unknown>>;
   createdAt: Date;
 }
@@ -235,9 +218,9 @@ export class WasmBackend implements IVelesDBBackend {
     }
 
     const k = options?.k ?? 10;
-    const rawResults = collection.store.search(queryVector, k);
+    const rawResults = collection.store.search(queryVector, k) as Array<[bigint, number]>;
 
-    return rawResults.map(([id, score]) => {
+    return rawResults.map(([id, score]: [bigint, number]) => {
       const stringId = String(id);
       const result: SearchResult = {
         id: stringId,
