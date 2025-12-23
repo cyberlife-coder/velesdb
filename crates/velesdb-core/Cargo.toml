@@ -122,3 +122,7 @@ harness = false
 [[bench]]
 name = "parallel_benchmark"
 harness = false
+
+[[bench]]
+name = "import_benchmark"
+harness = false
