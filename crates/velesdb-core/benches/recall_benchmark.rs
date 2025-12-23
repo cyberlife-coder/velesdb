@@ -7,8 +7,8 @@
 //! For HNSW approximate search, recall depends on the quality profile.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use std::collections::HashSet;
 use velesdb_core::distance::DistanceMetric;
+use velesdb_core::metrics::{mrr, precision_at_k, recall_at_k};
 use velesdb_core::simd;
 use velesdb_core::{HnswIndex, HnswParams, SearchQuality, VectorIndex};
 
@@ -61,26 +61,7 @@ fn brute_force_knn(
     distances.into_iter().take(k).map(|(id, _)| id).collect()
 }
 
-/// Calculate recall@k: proportion of true neighbors found in top-k results
-fn calculate_recall(ground_truth: &[u64], results: &[u64]) -> f64 {
-    let truth_set: HashSet<u64> = ground_truth.iter().copied().collect();
-    let found = results.iter().filter(|id| truth_set.contains(id)).count();
-    #[allow(clippy::cast_precision_loss)]
-    let recall = found as f64 / ground_truth.len() as f64;
-    recall
-}
-
-/// Calculate Mean Reciprocal Rank (MRR)
-fn calculate_mrr(ground_truth: &[u64], results: &[u64]) -> f64 {
-    let truth_set: HashSet<u64> = ground_truth.iter().copied().collect();
-    for (rank, id) in results.iter().enumerate() {
-        if truth_set.contains(id) {
-            #[allow(clippy::cast_precision_loss)]
-            return 1.0 / (rank + 1) as f64;
-        }
-    }
-    0.0
-}
+// Note: recall_at_k, precision_at_k, and mrr are now imported from velesdb_core::metrics
 
 /// Benchmark recall for HNSW index with different quality profiles
 fn bench_hnsw_recall(c: &mut Criterion) {
@@ -145,9 +126,16 @@ fn bench_hnsw_recall(c: &mut Criterion) {
                                 let result_ids: Vec<u64> =
                                     results.iter().map(|(id, _)| *id).collect();
 
-                                total_recall += calculate_recall(ground_truth, &result_ids);
-                                total_mrr += calculate_mrr(ground_truth, &result_ids);
+                                total_recall += recall_at_k(ground_truth, &result_ids);
+                                total_mrr += mrr(ground_truth, &result_ids);
                             }
+
+                            // Also compute precision for completeness
+                            let last_query = &queries[0];
+                            let last_results = index.search_with_quality(last_query, k, quality);
+                            let last_ids: Vec<u64> =
+                                last_results.iter().map(|(id, _)| *id).collect();
+                            let _precision = precision_at_k(&ground_truths[0], &last_ids);
 
                             #[allow(clippy::cast_precision_loss)]
                             let avg_recall = total_recall / queries.len() as f64;
@@ -211,7 +199,7 @@ fn print_recall_stats(c: &mut Criterion) {
                 for (query, ground_truth) in queries.iter().zip(&ground_truths) {
                     let results = index.search_with_quality(query, k, quality);
                     let result_ids: Vec<u64> = results.iter().map(|(id, _)| *id).collect();
-                    total_recall += calculate_recall(ground_truth, &result_ids);
+                    total_recall += recall_at_k(ground_truth, &result_ids);
                 }
 
                 #[allow(clippy::cast_precision_loss)]
