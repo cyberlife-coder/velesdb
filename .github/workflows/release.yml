@@ -1,9 +1,16 @@
 # =============================================================================
 # VelesDB Core - Release & Publication Workflow
 # =============================================================================
-# Ce workflow gère la publication automatique des versions de VelesDB-Core
-# en utilisant le Versioning Sémantique (SemVer). Il se déclenche lors de la
-# création d'un tag de version (ex: v1.2.3).
+# Déclenché par tag v* uniquement.
+# 
+# Stratégie : Le tag pointe vers un commit qui a déjà passé CI sur main.
+# On ne refait PAS les tests, on build et publie directement.
+#
+# Publications :
+# - crates.io (velesdb-core, velesdb-server, velesdb-cli, tauri-plugin)
+# - GitHub Release (binaries Linux/Windows)
+# - PyPI (via pypi-publish.yml, déclenché par release)
+# - npm (via wasm-publish.yml, déclenché par release)
 # =============================================================================
 
 name: Release
@@ -12,14 +19,14 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'  # Pre-releases (ex: v1.0.0-beta.1)
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'  # Pre-releases (v1.0.0-beta.1)
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   # ===========================================================================
-  # Validation pré-release
+  # Validation du tag
   # ===========================================================================
   validate:
     name: Validate Release
@@ -28,10 +35,9 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
@@ -43,198 +49,128 @@ jobs:
           fi
           echo "📦 Version: $VERSION"
 
-      - name: Verify Cargo.toml version matches tag
+      - name: Verify Cargo.toml matches tag
         run: |
           CARGO_VERSION=$(grep -m1 'version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
-          TAG_VERSION=${{ steps.version.outputs.version }}
-          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
-            echo "❌ Version mismatch: Cargo.toml ($CARGO_VERSION) != tag ($TAG_VERSION)"
+          if [ "$CARGO_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "❌ Version mismatch: Cargo.toml ($CARGO_VERSION) != tag (${{ steps.version.outputs.version }})"
             exit 1
           fi
-          echo "✅ Version match: $CARGO_VERSION"
+          echo "✅ Version: $CARGO_VERSION"
 
   # ===========================================================================
-  # Tests de régression finaux
+  # Build release binaries (multi-platform)
   # ===========================================================================
-  regression-tests:
-    name: Regression Tests
-    runs-on: ubuntu-latest
-    needs: validate
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run all tests
-        run: cargo test --all-features --release
-
-      - name: Run doc tests
-        run: cargo test --doc --all-features
-
-  # ===========================================================================
-  # Build des binaires pour chaque plateforme
-  # ===========================================================================
-  build-release:
-    name: Build Release (${{ matrix.target }})
+  build-binaries:
+    name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-    needs: [validate, regression-tests]
+    needs: validate
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact_name: velesdb-linux-x86_64
+            artifact: velesdb-linux-x86_64
+            ext: tar.gz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            artifact_name: velesdb-windows-x86_64
-          # NOTE: macOS disabled - simdeez/anndists uses AVX2/SSE2 (x86 only)
-          # aarch64-apple-darwin fails because ARM doesn't support AVX2
-          # TODO: Re-enable when upstream adds NEON support for ARM
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+            artifact: velesdb-windows-x86_64
+            ext: zip
+          # macOS désactivé (anndists AVX2 x86 only)
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build release binary
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "release-${{ matrix.target }}"
+
+      - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package binary (Unix)
+      - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/velesdb dist/ 2>/dev/null || true
           cp target/${{ matrix.target }}/release/velesdb-server dist/ 2>/dev/null || true
-          cp target/${{ matrix.target }}/release/libvelesdb_core.* dist/ 2>/dev/null || true
-          cp README.md dist/
-          cp LICENSE dist/
-          tar -czvf ${{ matrix.artifact_name }}.tar.gz -C dist .
+          cp target/${{ matrix.target }}/release/velesdb-cli dist/ 2>/dev/null || true
+          cp README.md LICENSE dist/
+          tar -czvf ${{ matrix.artifact }}.${{ matrix.ext }} -C dist .
 
-      - name: Package binary (Windows)
+      - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
           mkdir dist
-          Copy-Item target/${{ matrix.target }}/release/velesdb.exe dist/ -ErrorAction SilentlyContinue
-          Copy-Item target/${{ matrix.target }}/release/velesdb-server.exe dist/ -ErrorAction SilentlyContinue
-          Copy-Item target/${{ matrix.target }}/release/*.dll dist/ -ErrorAction SilentlyContinue
-          Copy-Item README.md dist/
-          Copy-Item LICENSE dist/
-          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.artifact_name }}.zip
+          Copy-Item target/${{ matrix.target }}/release/*.exe dist/ -ErrorAction SilentlyContinue
+          Copy-Item README.md,LICENSE dist/
+          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.artifact }}.${{ matrix.ext }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            *.tar.gz
-            *.zip
+          name: ${{ matrix.artifact }}
+          path: "*.${{ matrix.ext }}"
 
   # ===========================================================================
-  # Publication sur crates.io
+  # Publish to crates.io (stable releases only)
   # ===========================================================================
   publish-crates:
-    name: Publish to crates.io
+    name: Publish crates.io
     runs-on: ubuntu-latest
-    needs: [validate, regression-tests]
+    needs: validate
     if: needs.validate.outputs.is_prerelease == 'false'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Publish velesdb-core
+      - name: Publish crates (ordered by dependency)
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cargo publish -p velesdb-core || echo "velesdb-core already published"
-          sleep 30  # Wait for crates.io index update
-
-      - name: Publish velesdb-server
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish -p velesdb-server || echo "velesdb-server already published"
-          sleep 30
-
-      - name: Publish velesdb-cli
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish -p velesdb-cli || echo "velesdb-cli already published"
-          sleep 30
-
-      - name: Publish velesdb-wasm
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish -p velesdb-wasm || echo "velesdb-wasm already published"
-          sleep 30
-
-      - name: Publish tauri-plugin-velesdb
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish -p tauri-plugin-velesdb || echo "tauri-plugin-velesdb already published"
+          # Order matters: dependencies first
+          for crate in velesdb-core velesdb-server velesdb-cli tauri-plugin-velesdb; do
+            echo "📦 Publishing $crate..."
+            cargo publish -p $crate --allow-dirty || echo "⚠️ $crate: already published or error"
+            sleep 30  # Wait for crates.io index
+          done
 
   # ===========================================================================
-  # Publication sur PyPI - DÉPLACÉ vers pypi-publish.yml
-  # ===========================================================================
-  # PyPI publishing is handled by the dedicated pypi-publish.yml workflow
-  # which triggers on GitHub Release creation. This avoids duplication and
-  # provides better control over the PyPI release process.
-  # See: .github/workflows/pypi-publish.yml
-
-  # ===========================================================================
-  # Signature des binaires (désactivé par défaut)
-  # ===========================================================================
-  sign-release:
-    name: Sign Release Binaries
-    needs: [validate, build-release]
-    # ⚠️ DÉSACTIVÉ - Décommenter quand les certificats sont configurés
-    if: false
-    uses: ./.github/workflows/code-signing.yml
-    with:
-      dry_run: 'false'
-    secrets: inherit
-
-  # ===========================================================================
-  # Création de la release GitHub
+  # Create GitHub Release
   # ===========================================================================
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [validate, build-release]
-    # Ajouter sign-release aux needs quand activé:
-    # needs: [validate, build-release, sign-release]
+    needs: [validate, build-binaries]
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
       - name: Generate changelog
-        id: changelog
         run: |
-          # Génération automatique du changelog basé sur les commits
           echo "## What's Changed" > CHANGELOG.md
-          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> CHANGELOG.md 2>/dev/null || echo "- Initial release" >> CHANGELOG.md
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> CHANGELOG.md
+          else
+            echo "- Initial release" >> CHANGELOG.md
+          fi
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: VelesDB Core v${{ needs.validate.outputs.version }}
+          name: VelesDB v${{ needs.validate.outputs.version }}
           body_path: CHANGELOG.md
           prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
           files: |
@@ -243,18 +179,46 @@ jobs:
           generate_release_notes: true
 
   # ===========================================================================
-  # Notification de publication (pour VelesDB-Premium)
+  # Notify downstream (Premium repo + trigger PyPI/npm via release event)
   # ===========================================================================
-  notify-premium:
-    name: Notify Premium Repository
+  notify:
+    name: Notify Downstream
     runs-on: ubuntu-latest
     needs: [validate, create-release]
     if: needs.validate.outputs.is_prerelease == 'false'
     steps:
-      - name: Trigger Premium update workflow
+      - name: Trigger velesdb-private update
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.PREMIUM_REPO_TOKEN }}
           repository: cyberlife-coder/velesdb-private
           event-type: core-release
           client-payload: '{"version": "${{ needs.validate.outputs.version }}"}'
+        continue-on-error: true
+
+      # PyPI et npm sont déclenchés automatiquement par l'event "release: published"
+      # via pypi-publish.yml et wasm-publish.yml
+
+  # ===========================================================================
+  # Summary
+  # ===========================================================================
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [validate, build-binaries, publish-crates, create-release]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Pre-release:** ${{ needs.validate.outputs.is_prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Binaries | ${{ needs.build-binaries.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| crates.io | ${{ needs.publish-crates.result == 'success' && '✅' || (needs.publish-crates.result == 'skipped' && '⏭️ skipped' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Release | ${{ needs.create-release.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI | ⏳ triggered by release |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm (WASM) | ⏳ triggered by release |" >> $GITHUB_STEP_SUMMARY
