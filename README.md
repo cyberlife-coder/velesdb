@@ -13,6 +13,7 @@
   <a href="https://crates.io/crates/velesdb-core"><img src="https://img.shields.io/crates/v/velesdb-core.svg?style=flat-square" alt="Crates.io"></a>
   <a href="https://pypi.org/project/velesdb/"><img src="https://img.shields.io/pypi/v/velesdb?style=flat-square" alt="PyPI"></a>
   <a href="https://docs.rs/velesdb-core"><img src="https://img.shields.io/docsrs/velesdb-core?style=flat-square" alt="docs.rs"></a>
+  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/"><img src="https://img.shields.io/badge/docs-DeepWiki-blue?style=flat-square" alt="DeepWiki"></a>
   <a href="https://github.com/cyberlife-coder/VelesDB/actions"><img src="https://img.shields.io/github/actions/workflow/status/cyberlife-coder/VelesDB/ci.yml?branch=main&style=flat-square" alt="Build Status"></a>
   <a href="https://github.com/cyberlife-coder/VelesDB/blob/main/LICENSE"><img src="https://img.shields.io/crates/l/velesdb-core?style=flat-square" alt="License"></a>
   <a href="https://github.com/cyberlife-coder/VelesDB"><img src="https://img.shields.io/github/stars/cyberlife-coder/VelesDB?style=flat-square" alt="GitHub Stars"></a>
@@ -24,6 +25,7 @@
   <a href="#-api-reference">API Reference</a> •
   <a href="#-velesql-query-language">VelesQL</a> •
   <a href="#-performance">Performance</a> •
+  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/">📖 Docs</a> •
   <a href="#-contributing">Contributing</a>
 </p>
 
@@ -759,6 +761,36 @@ velesql> SELECT * FROM documents WHERE category = 'tech' LIMIT 5;
 
 ---
 
+## 📚 Documentation
+
+Comprehensive documentation is available on **DeepWiki**:
+
+<p align="center">
+  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/"><img src="https://img.shields.io/badge/📖_Full_Documentation-DeepWiki-blue?style=for-the-badge" alt="DeepWiki Documentation"></a>
+</p>
+
+### Documentation Index
+
+| Section | Description |
+|---------|-------------|
+| [**Overview**](https://deepwiki.com/cyberlife-coder/VelesDB/) | Introduction, architecture diagrams, and component overview |
+| [**System Architecture**](https://deepwiki.com/cyberlife-coder/VelesDB/1.1-system-architecture) | Layered architecture and component interactions |
+| [**Deployment Patterns**](https://deepwiki.com/cyberlife-coder/VelesDB/1.2-deployment-patterns) | Library, Server, WASM, Tauri, and Docker deployments |
+| [**Core Engine**](https://deepwiki.com/cyberlife-coder/VelesDB/3-core-engine-(velesdb-core)) | In-depth `velesdb-core` internals (HNSW, BM25, ColumnStore) |
+| [**REST API Reference**](https://deepwiki.com/cyberlife-coder/VelesDB/4-rest-api-server) | Complete API documentation with all 11 endpoints |
+| [**VelesQL Language**](https://deepwiki.com/cyberlife-coder/VelesDB/4.2-velesql-query-language) | SQL-like query syntax, operators, and examples |
+| [**SIMD Optimizations**](https://deepwiki.com/cyberlife-coder/VelesDB/3.5-simd-optimizations) | Platform-specific SIMD (AVX2, NEON, WASM SIMD128) |
+| [**Performance & Benchmarks**](https://deepwiki.com/cyberlife-coder/VelesDB/9-performance-and-benchmarks) | Detailed benchmarks and optimization guide |
+
+### Quick Links
+
+- 📖 **[Full Documentation](https://deepwiki.com/cyberlife-coder/VelesDB/)** — Architecture, internals, and API reference
+- 📊 **[Benchmarks](docs/BENCHMARKS.md)** — Performance metrics and comparisons
+- 📝 **[Changelog](CHANGELOG.md)** — Version history and release notes
+- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** — Technical deep-dive
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
@@ -865,6 +897,7 @@ The BSL is a source-available license that converts to Apache 2.0 after 4 years.
 <p align="center">
   <strong>Built with ❤️ and 🦀 Rust</strong><br/>
   <a href="https://github.com/cyberlife-coder/VelesDB">GitHub</a> •
+  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/">Documentation</a> •
   <a href="https://github.com/cyberlife-coder/VelesDB/issues">Issues</a> •
   <a href="https://github.com/cyberlife-coder/VelesDB/releases">Releases</a>
 </p>

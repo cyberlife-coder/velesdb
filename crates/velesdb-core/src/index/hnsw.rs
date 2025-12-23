@@ -681,6 +681,117 @@ impl HnswIndex {
         count
     }
 
+    /// Searches multiple queries in parallel using rayon.
+    ///
+    /// This method is optimized for batch query workloads and can significantly
+    /// reduce total search time on multi-core systems.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - Slice of query vectors
+    /// * `k` - Number of nearest neighbors to return per query
+    /// * `quality` - Search quality profile
+    ///
+    /// # Returns
+    ///
+    /// Vector of results, one per query, in the same order as input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any query dimension doesn't match the index dimension.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let queries: Vec<Vec<f32>> = generate_queries(100);
+    /// let query_refs: Vec<&[f32]> = queries.iter().map(|q| q.as_slice()).collect();
+    /// let results = index.search_batch_parallel(&query_refs, 10, SearchQuality::Balanced);
+    /// ```
+    #[must_use]
+    pub fn search_batch_parallel(
+        &self,
+        queries: &[&[f32]],
+        k: usize,
+        quality: SearchQuality,
+    ) -> Vec<Vec<(u64, f32)>> {
+        use rayon::prelude::*;
+
+        queries
+            .par_iter()
+            .map(|query| self.search_with_quality(query, k, quality))
+            .collect()
+    }
+
+    /// Performs exact brute-force search in parallel using rayon.
+    ///
+    /// This method computes exact distances to all vectors in the index,
+    /// guaranteeing **100% recall**. Uses all available CPU cores.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The query vector
+    /// * `k` - Number of nearest neighbors to return
+    ///
+    /// # Returns
+    ///
+    /// Vector of (id, score) tuples, sorted by similarity.
+    ///
+    /// # Performance
+    ///
+    /// - **Recall**: 100% (exact)
+    /// - **Latency**: O(n/cores) where n = dataset size
+    /// - **Best for**: Small datasets (<10k) or when recall is critical
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query dimension doesn't match the index dimension.
+    #[must_use]
+    pub fn brute_force_search_parallel(&self, query: &[f32], k: usize) -> Vec<(u64, f32)> {
+        use rayon::prelude::*;
+
+        assert_eq!(
+            query.len(),
+            self.dimension,
+            "Query dimension mismatch: expected {}, got {}",
+            self.dimension,
+            query.len()
+        );
+
+        let vectors = self.vectors.read();
+        let idx_to_id = self.idx_to_id.read();
+
+        // Compute distances in parallel
+        let mut results: Vec<(u64, f32)> = vectors
+            .par_iter()
+            .filter_map(|(idx, vec)| {
+                let id = *idx_to_id.get(idx)?;
+                let score = match self.metric {
+                    DistanceMetric::Cosine => crate::simd::cosine_similarity_fast(query, vec),
+                    DistanceMetric::Euclidean => crate::simd::euclidean_distance_fast(query, vec),
+                    DistanceMetric::DotProduct => crate::simd::dot_product_fast(query, vec),
+                    DistanceMetric::Hamming => crate::simd::hamming_distance_fast(query, vec),
+                    DistanceMetric::Jaccard => crate::simd::jaccard_similarity_fast(query, vec),
+                };
+                Some((id, score))
+            })
+            .collect();
+
+        // Sort by similarity (metric-dependent ordering)
+        match self.metric {
+            DistanceMetric::Cosine | DistanceMetric::DotProduct | DistanceMetric::Jaccard => {
+                // Higher is better - sort descending
+                results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            DistanceMetric::Euclidean | DistanceMetric::Hamming => {
+                // Lower is better - sort ascending
+                results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            }
+        }
+
+        results.truncate(k);
+        results
+    }
+
     /// Sets the index to searching mode after bulk insertions.
     ///
     /// This is required by `hnsw_rs` after parallel insertions to ensure
