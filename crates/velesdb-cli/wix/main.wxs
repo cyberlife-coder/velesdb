@@ -49,6 +49,12 @@
                     <Directory Id='ExamplesFolder' Name='examples'>
                         <Directory Id='TauriExampleFolder' Name='tauri-rag-app'/>
                     </Directory>
+                    <Directory Id='DemosFolder' Name='demos'>
+                        <Directory Id='RagDemoFolder' Name='rag-pdf-demo'>
+                            <Directory Id='RagDemoSrcFolder' Name='src'/>
+                            <Directory Id='RagDemoStaticFolder' Name='static'/>
+                        </Directory>
+                    </Directory>
                     <Directory Id='DocsFolder' Name='docs'/>
                 </Directory>
             </Directory>
@@ -138,6 +144,79 @@
         </DirectoryRef>
 
         <!-- =================================================================
+             Components: Demos (RAG PDF Demo)
+             ================================================================= -->
+        <DirectoryRef Id='RagDemoFolder'>
+            <Component Id='RagDemoMain' Guid='C9D0E1F2-A3B4-5678-2345-901234567890' Win64='yes'>
+                <File Id='rag_readme'
+                    Name='README.md'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\README.md'
+                    KeyPath='yes'/>
+                <File Id='rag_pyproject'
+                    Name='pyproject.toml'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\pyproject.toml'/>
+                <File Id='rag_env_example'
+                    Name='.env.example'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\.env.example'/>
+                <File Id='rag_benchmark'
+                    Name='benchmark_layers.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\benchmark_layers.py'/>
+            </Component>
+        </DirectoryRef>
+        
+        <DirectoryRef Id='RagDemoSrcFolder'>
+            <Component Id='RagDemoSrc' Guid='D0E1F2A3-B4C5-6789-3456-012345678901' Win64='yes'>
+                <File Id='rag_src_init'
+                    Name='__init__.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\__init__.py'
+                    KeyPath='yes'/>
+                <File Id='rag_src_main'
+                    Name='main.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\main.py'/>
+                <File Id='rag_src_config'
+                    Name='config.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\config.py'/>
+                <File Id='rag_src_models'
+                    Name='models.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\models.py'/>
+                <File Id='rag_src_embeddings'
+                    Name='embeddings.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\embeddings.py'/>
+                <File Id='rag_src_pdf'
+                    Name='pdf_processor.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\pdf_processor.py'/>
+                <File Id='rag_src_velesdb'
+                    Name='velesdb_client.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\velesdb_client.py'/>
+                <File Id='rag_src_engine'
+                    Name='rag_engine.py'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\src\rag_engine.py'/>
+            </Component>
+        </DirectoryRef>
+        
+        <DirectoryRef Id='RagDemoStaticFolder'>
+            <Component Id='RagDemoStatic' Guid='E1F2A3B4-C5D6-7890-4567-123456789012' Win64='yes'>
+                <File Id='rag_static_index'
+                    Name='index.html'
+                    DiskId='1'
+                    Source='..\..\..\demos\rag-pdf-demo\static\index.html'
+                    KeyPath='yes'/>
+            </Component>
+        </DirectoryRef>
+
+        <!-- =================================================================
              Component: PATH Environment Variable (Optional)
              ================================================================= -->
         <DirectoryRef Id='BinFolder'>
@@ -194,6 +273,17 @@
             AllowAdvertise='no'>
             
             <ComponentRef Id='TauriExample'/>
+        </Feature>
+
+        <Feature Id='Demos'
+            Title='Demos'
+            Description='Complete demo applications (RAG PDF Demo with Python)'
+            Level='1'
+            AllowAdvertise='no'>
+            
+            <ComponentRef Id='RagDemoMain'/>
+            <ComponentRef Id='RagDemoSrc'/>
+            <ComponentRef Id='RagDemoStatic'/>
         </Feature>
 
         <Feature Id='AddToPath'

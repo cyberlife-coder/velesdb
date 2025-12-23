@@ -5,6 +5,34 @@ All notable changes to VelesDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2025-12-23
+
+### Added
+
+#### RAG PDF Demo
+- **Complete RAG demo** in `demos/rag-pdf-demo/`
+  - PDF upload and text extraction (PyMuPDF)
+  - Multilingual embeddings (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dims)
+  - Semantic search with VelesDB
+  - FastAPI backend with real-time performance metrics
+  - Modern UI with Tailwind CSS
+  - 21 TDD tests with pytest
+
+#### Performance Benchmarks (500 iterations)
+- **VelesDB Search**: 0.89ms mean (P95: 1.45ms)
+- **Full API Search**: 19.10ms mean (embed + search)
+- **HTTP persistent client**: 0.61ms vs 6.41ms (10x faster)
+
+#### MSI Installer
+- RAG PDF Demo now included in Windows installer
+- New "Demos" feature in installer with complete Python demo
+
+### Changed
+- Updated benchmark documentation with layer-by-layer latency analysis
+- Optimized VelesDB client with persistent HTTP connection
+
+---
+
 ## [0.3.2] - 2025-12-23
 
 ### Added
