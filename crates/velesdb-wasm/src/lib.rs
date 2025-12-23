@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 mod distance;
+mod persistence;
 mod simd;
 
 pub use distance::DistanceMetric;
@@ -378,6 +379,72 @@ impl VectorStore {
         }
 
         Ok(bytes)
+    }
+
+    /// Saves the vector store to IndexedDB.
+    ///
+    /// This method persists all vectors to the browser's IndexedDB,
+    /// enabling offline-first applications.
+    ///
+    /// # Arguments
+    ///
+    /// * `db_name` - Name of the IndexedDB database
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if IndexedDB is not available or the save fails.
+    ///
+    /// # Example
+    ///
+    /// ```javascript
+    /// const store = new VectorStore(768, "cosine");
+    /// store.insert(1n, vector1);
+    /// await store.save("my-vectors");
+    /// ```
+    #[wasm_bindgen]
+    pub async fn save(&self, db_name: &str) -> Result<(), JsValue> {
+        let bytes = self.export_to_bytes()?;
+        persistence::save_to_indexeddb(db_name, &bytes).await
+    }
+
+    /// Loads a vector store from IndexedDB.
+    ///
+    /// This method restores all vectors from the browser's IndexedDB.
+    ///
+    /// # Arguments
+    ///
+    /// * `db_name` - Name of the IndexedDB database
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database doesn't exist or is corrupted.
+    ///
+    /// # Example
+    ///
+    /// ```javascript
+    /// const store = await VectorStore.load("my-vectors");
+    /// console.log(store.len); // Number of restored vectors
+    /// ```
+    #[wasm_bindgen]
+    pub async fn load(db_name: &str) -> Result<VectorStore, JsValue> {
+        let bytes = persistence::load_from_indexeddb(db_name).await?;
+        Self::import_from_bytes(&bytes)
+    }
+
+    /// Deletes the IndexedDB database.
+    ///
+    /// Use this to clear all persisted data.
+    ///
+    /// # Arguments
+    ///
+    /// * `db_name` - Name of the IndexedDB database to delete
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the deletion fails.
+    #[wasm_bindgen]
+    pub async fn delete_database(db_name: &str) -> Result<(), JsValue> {
+        persistence::delete_database(db_name).await
     }
 
     /// Imports a vector store from binary format.

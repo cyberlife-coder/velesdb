@@ -103,82 +103,49 @@ class VectorStore {
 
 ## IndexedDB Persistence
 
-Save and restore your vector store for offline-first applications:
+Save and restore your vector store for offline-first applications with built-in async methods:
 
 ```javascript
 import init, { VectorStore } from 'velesdb-wasm';
 
-// Save to IndexedDB
-async function saveToIndexedDB(store, dbName = 'velesdb') {
-  const bytes = store.export_to_bytes();
-  
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1);
-    
-    request.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore('vectors');
-    };
-    
-    request.onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('vectors', 'readwrite');
-      tx.objectStore('vectors').put(bytes, 'store');
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    };
-  });
-}
-
-// Load from IndexedDB
-async function loadFromIndexedDB(dbName = 'velesdb') {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1);
-    
-    request.onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('vectors', 'readonly');
-      const getReq = tx.objectStore('vectors').get('store');
-      
-      getReq.onsuccess = () => {
-        if (getReq.result) {
-          const store = VectorStore.import_from_bytes(getReq.result);
-          resolve(store);
-        } else {
-          resolve(null);
-        }
-      };
-    };
-  });
-}
-
-// Usage
 async function main() {
   await init();
-  
-  // Try to load existing store
-  let store = await loadFromIndexedDB();
-  
-  if (!store) {
-    // Create new store
-    store = new VectorStore(768, 'cosine');
-    store.insert(1n, new Float32Array(768).fill(0.1));
-  }
-  
-  // ... use store ...
-  
-  // Save before closing
-  await saveToIndexedDB(store);
+
+  // Create and populate a store
+  const store = new VectorStore(768, 'cosine');
+  store.insert(1n, new Float32Array(768).fill(0.1));
+  store.insert(2n, new Float32Array(768).fill(0.2));
+
+  // Save to IndexedDB (single async call)
+  await store.save('my-vectors-db');
+  console.log('Saved!', store.len, 'vectors');
+
+  // Later: Load from IndexedDB
+  const restored = await VectorStore.load('my-vectors-db');
+  console.log('Restored!', restored.len, 'vectors');
+
+  // Clean up: Delete database
+  await VectorStore.delete_database('my-vectors-db');
 }
+
+main();
 ```
 
 ### Persistence API
 
 ```typescript
 class VectorStore {
-  // Export to binary format (for IndexedDB, localStorage, file download)
-  export_to_bytes(): Uint8Array;
+  // Save to IndexedDB (async)
+  save(db_name: string): Promise<void>;
   
-  // Import from binary format (static constructor)
+  // Load from IndexedDB (async, static)
+  static load(db_name: string): Promise<VectorStore>;
+  
+  // Delete IndexedDB database (async, static)
+  static delete_database(db_name: string): Promise<void>;
+  
+  // Manual binary export/import (for localStorage, file download, etc.)
+  export_to_bytes(): Uint8Array;
   static import_from_bytes(bytes: Uint8Array): VectorStore;
 }
 ```
