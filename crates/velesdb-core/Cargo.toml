@@ -114,3 +114,11 @@ harness = false
 [[bench]]
 name = "bm25_benchmark"
 harness = false
+
+[[bench]]
+name = "recall_benchmark"
+harness = false
+
+[[bench]]
+name = "parallel_benchmark"
+harness = false
