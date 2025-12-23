@@ -111,6 +111,11 @@ jobs:
         with:
           components: llvm-tools-preview
 
+      - name: Install system dependencies (for Tauri plugin)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: "coverage"
@@ -157,6 +162,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system dependencies (for Tauri plugin)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: "build"
@@ -176,6 +186,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies (for Tauri plugin)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - uses: Swatinem/rust-cache@v2
         with:
