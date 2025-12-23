@@ -145,7 +145,7 @@ jobs:
       - name: Build .msi installer (Windows)
         if: runner.os == 'Windows'
         run: |
-          cargo wix --no-build --nocapture -o velesdb-${{ needs.validate.outputs.version }}-x86_64.msi
+          cargo wix -p velesdb-cli --no-build --nocapture -o velesdb-${{ needs.validate.outputs.version }}-x86_64.msi
         env:
           VERSION: ${{ needs.validate.outputs.version }}
 
