@@ -110,6 +110,6 @@ LIMIT 10;
 
 ## License
 
-Business Source License 1.1 (BSL-1.1)
+Elastic License 2.0 (ELv2)
 
 See [LICENSE](https://github.com/cyberlife-coder/velesdb/blob/main/LICENSE) for details.

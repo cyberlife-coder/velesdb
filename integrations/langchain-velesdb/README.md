@@ -93,6 +93,6 @@ VelesDBVectorStore(
 
 ## License
 
-Business Source License 1.1 (BSL-1.1)
+Elastic License 2.0 (ELv2)
 
 See [LICENSE](https://github.com/cyberlife-coder/VelesDB/blob/main/LICENSE) for details.
