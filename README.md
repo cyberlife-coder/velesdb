@@ -10,7 +10,7 @@
 </h3>
 
 <p align="center">
-  <strong>The fastest open-source vector database for AI applications</strong><br/>
+  <strong>The fastest source-available vector database for AI applications</strong><br/>
   Built in Rust • Zero Config • Production Ready
 </p>
 
@@ -69,7 +69,7 @@
 
 ## 🎯 What is VelesDB?
 
-VelesDB is the **fastest open-source vector database** built entirely in Rust. Designed for AI applications requiring **microsecond latency** — semantic search, RAG pipelines, recommendation engines, and real-time AI.
+VelesDB is the **fastest source-available vector database** built entirely in Rust. Designed for AI applications requiring **microsecond latency** — semantic search, RAG pipelines, recommendation engines, and real-time AI.
 
 ```sql
 -- It's that simple. No JSON DSL, no complex APIs.
@@ -508,7 +508,7 @@ curl -X POST http://localhost:8080/query \
 | **Query Language** | **SQL-like (VelesQL)** | Python SDK/SQL | JSON DSL | JSON/SDK | SQL |
 | **Full Text Search** | ✅ BM25 + Hybrid | ✅ Hybrid | ✅ | ❌ | ✅ (via Postgres) |
 | **Quantization** | **SQ8 (Scalar)** | IVF-PQ, RaBitQ | Binary/SQ | Proprietary | IVFFlat/HNSW |
-| **License** | **BSL-1.1** | Apache 2.0 | Apache 2.0 | Closed | PostgreSQL |
+| **License** | **ELv2** | Apache 2.0 | Apache 2.0 | Closed | PostgreSQL |
 | **Best For** | **Embedded / Edge / Speed** | Multimodal / Lakehouse | Scale / Cloud | Managed SaaS | Relational + Vector |
 
 ### 🎯 Why Choose VelesDB?
@@ -1008,9 +1008,9 @@ Need enterprise features? **VelesDB Premium** extends Core with:
 
 ## 📜 License
 
-VelesDB is licensed under the [Business Source License 1.1 (BSL-1.1)](LICENSE).
+VelesDB is licensed under the [Elastic License 2.0 (ELv2)](LICENSE).
 
-The BSL is a source-available license that converts to Apache 2.0 after 4 years.
+ELv2 is a source-available license that allows free use, modification, and distribution, with restrictions only on providing the software as a managed service.
 
 ---
 

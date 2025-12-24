@@ -157,4 +157,4 @@ try {
 
 ## License
 
-BUSL-1.1 - See [LICENSE](../../LICENSE) for details.
+Elastic License 2.0 (ELv2) - See [LICENSE](../../LICENSE) for details.

@@ -46,7 +46,7 @@ use velesdb_core::{Database, DistanceMetric, Point};
         version = "0.1.1",
         description = "High-performance vector database for AI applications. \
             Supports semantic search, HNSW indexing, and multiple distance metrics.",
-        license(name = "BSL-1.1", url = "https://github.com/cyberlife-coder/VelesDB/blob/main/LICENSE"),
+        license(name = "ELv2", url = "https://github.com/cyberlife-coder/VelesDB/blob/main/LICENSE"),
         contact(name = "VelesDB Team", url = "https://github.com/cyberlife-coder/VelesDB")
     ),
     servers(
@@ -1253,7 +1253,7 @@ mod tests {
         let json = openapi.to_json().expect("Failed to serialize OpenAPI spec");
 
         // Assert - license is specified
-        assert!(json.contains("BSL-1.1"), "Should have BSL-1.1 license");
+        assert!(json.contains("ELv2"), "Should have ELv2 license");
     }
 
     #[test]

@@ -198,6 +198,6 @@ See the [examples/basic-app](./examples/basic-app) directory for a complete Taur
 
 ## License
 
-BSL-1.1 (Business Source License)
+Elastic License 2.0 (ELv2)
 
 See [LICENSE](../../LICENSE) for details.
