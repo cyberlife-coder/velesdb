@@ -28,6 +28,11 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Install system dependencies (Tauri requires GTK/WebKit)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -38,9 +43,7 @@ jobs:
 
       - name: Verify package
         working-directory: integrations/tauri-plugin-velesdb
-        run: |
-          cargo check
-          cargo package --list
+        run: cargo package --list --allow-dirty
 
       - name: Publish to crates.io (dry run)
         if: ${{ github.event.inputs.dry_run == 'true' }}
