@@ -1,11 +1,11 @@
-# @velesdb/sdk
+# @wiscale/velesdb-sdk
 
 Official TypeScript SDK for VelesDB - Vector Search in Microseconds.
 
 ## Installation
 
 ```bash
-npm install @velesdb/sdk
+npm install @wiscale/velesdb-sdk
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ npm install @velesdb/sdk
 ### WASM Backend (Browser/Node.js)
 
 ```typescript
-import { VelesDB } from '@velesdb/sdk';
+import { VelesDB } from '@wiscale/velesdb-sdk';
 
 // Initialize with WASM backend
 const db = new VelesDB({ backend: 'wasm' });
@@ -50,7 +50,7 @@ await db.close();
 ### REST Backend (Server)
 
 ```typescript
-import { VelesDB } from '@velesdb/sdk';
+import { VelesDB } from '@wiscale/velesdb-sdk';
 
 const db = new VelesDB({
   backend: 'rest',
@@ -133,7 +133,7 @@ Close the client and release resources.
 ## Error Handling
 
 ```typescript
-import { VelesDBError, ValidationError, ConnectionError, NotFoundError } from '@velesdb/sdk';
+import { VelesDBError, ValidationError, ConnectionError, NotFoundError } from '@wiscale/velesdb-sdk';
 
 try {
   await db.search('nonexistent', query);

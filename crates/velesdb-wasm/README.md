@@ -1,6 +1,6 @@
 # VelesDB WASM
 
-[![npm](https://img.shields.io/npm/v/velesdb-wasm)](https://www.npmjs.com/package/velesdb-wasm)
+[![npm](https://img.shields.io/npm/v/@wiscale/velesdb-wasm)](https://www.npmjs.com/package/@wiscale/velesdb-wasm)
 [![License](https://img.shields.io/badge/license-ELv2-blue)](https://github.com/cyberlife-coder/VelesDB/blob/main/LICENSE)
 
 WebAssembly build of [VelesDB](https://github.com/cyberlife-coder/VelesDB) - vector search in the browser.
@@ -15,13 +15,13 @@ WebAssembly build of [VelesDB](https://github.com/cyberlife-coder/VelesDB) - vec
 ## Installation
 
 ```bash
-npm install velesdb-wasm
+npm install @wiscale/velesdb-wasm
 ```
 
 ## Usage
 
 ```javascript
-import init, { VectorStore } from 'velesdb-wasm';
+import init, { VectorStore } from '@wiscale/velesdb-wasm';
 
 async function main() {
   // Initialize WASM module
@@ -106,7 +106,7 @@ class VectorStore {
 Save and restore your vector store for offline-first applications with built-in async methods:
 
 ```javascript
-import init, { VectorStore } from 'velesdb-wasm';
+import init, { VectorStore } from '@wiscale/velesdb-wasm';
 
 async function main() {
   await init();
