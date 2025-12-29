@@ -261,7 +261,8 @@ impl VectorStorage for MmapStorage {
         }
 
         // 1. Calculate total space needed and prepare batch WAL entry
-        let mut new_vectors: Vec<(u64, usize)> = Vec::with_capacity(vectors.len());
+        // Perf: Use HashMap for O(1) lookup instead of Vec with O(n) find
+        let mut new_vector_offsets: HashMap<u64, usize> = HashMap::with_capacity(vectors.len());
         let mut total_new_size = 0usize;
 
         {
@@ -269,7 +270,7 @@ impl VectorStorage for MmapStorage {
             for &(id, _) in vectors {
                 if !index.contains_key(&id) {
                     let offset = self.next_offset.load(Ordering::Relaxed) + total_new_size;
-                    new_vectors.push((id, offset));
+                    new_vector_offsets.insert(id, offset);
                     total_new_size += vector_size;
                 }
             }
@@ -322,14 +323,12 @@ impl VectorStorage for MmapStorage {
                     )
                 };
 
-                // Get offset (existing or from new_vectors)
+                // Get offset (existing or from new_vector_offsets)
+                // Perf: O(1) HashMap lookup instead of O(n) linear search
                 let offset = if let Some(&existing) = index.get(&id) {
                     existing
                 } else {
-                    new_vectors
-                        .iter()
-                        .find(|(vid, _)| *vid == id)
-                        .map_or(0, |(_, off)| *off)
+                    new_vector_offsets.get(&id).copied().unwrap_or(0)
                 };
 
                 mmap[offset..offset + vector_size].copy_from_slice(vector_bytes);
@@ -337,9 +336,9 @@ impl VectorStorage for MmapStorage {
         }
 
         // 5. Batch update index
-        if !new_vectors.is_empty() {
+        if !new_vector_offsets.is_empty() {
             let mut index = self.index.write();
-            for (id, offset) in new_vectors {
+            for (id, offset) in new_vector_offsets {
                 index.insert(id, offset);
             }
         }
