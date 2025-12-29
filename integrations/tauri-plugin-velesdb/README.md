@@ -28,15 +28,15 @@ tauri-plugin-velesdb = "0.1"
 ```json
 {
   "dependencies": {
-    "tauri-plugin-velesdb": "^0.1.0"
+    "@wiscale/tauri-plugin-velesdb": "^0.5.1"
   }
 }
 ```
 
 ```bash
-npm install tauri-plugin-velesdb
-# pnpm add tauri-plugin-velesdb
-# yarn add tauri-plugin-velesdb
+npm install @wiscale/tauri-plugin-velesdb
+# pnpm add @wiscale/tauri-plugin-velesdb
+# yarn add @wiscale/tauri-plugin-velesdb
 ```
 
 ## Usage

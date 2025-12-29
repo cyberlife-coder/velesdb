@@ -830,9 +830,9 @@ tauri-plugin-velesdb = "0.1"
 
 ```bash
 # Frontend (npm / pnpm / yarn)
-npm install tauri-plugin-velesdb
-# pnpm add tauri-plugin-velesdb
-# yarn add tauri-plugin-velesdb
+npm install @wiscale/tauri-plugin-velesdb
+# pnpm add @wiscale/tauri-plugin-velesdb
+# yarn add @wiscale/tauri-plugin-velesdb
 ```
 
 Build AI-powered desktop apps with vector search:
