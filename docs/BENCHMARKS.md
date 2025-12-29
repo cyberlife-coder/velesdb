@@ -1,20 +1,21 @@
 # 📊 VelesDB Performance Benchmarks
 
-*Last updated: December 29, 2025 (v0.5.0)*
+*Last updated: December 29, 2025 (v0.5.0 - Post-Refactoring TDD)*
 
 This document details the performance benchmarks for VelesDB. Tests were conducted on a standard workstation (8-core CPU, AVX2/AVX-512 support).
 
 ---
 
-## 🚀 v0.5.0 Headline: VelesDB 3.3x Faster Insertion Than pgvector
+## 🚀 v0.5.0 Headline: VelesDB 6.8x Faster Insertion Than pgvector
 
-### Performance Summary (5,000 vectors, 768D, Docker)
+### Performance Summary (50,000 vectors, 768D, Docker)
 
 | Metric | pgvector | VelesDB REST | Winner |
 |--------|----------|--------------|--------|
-| **Insert + Index** | 9.03s | **2.72s** | **VelesDB 3.3x** ✅ |
-| **Search P50** | **3.5ms** | 5.5ms | pgvector |
-| **Recall@10** | **100%** | 98.7% | pgvector |
+| **Insert + Index** | 163.47s | **23.95s** | **VelesDB 6.8x** ✅ |
+| **Search P50** | 50.7ms | 50.3ms | ~Equal |
+| **Search P99** | 61.4ms | 60.5ms | ~Equal |
+| **Recall@10** | **100%** | 97.4% | pgvector |
 
 ### Why VelesDB REST is Slower on Search
 
@@ -50,9 +51,9 @@ We benchmarked VelesDB against [pgvector](https://github.com/pgvector/pgvector) 
 
 | Parameter | Value |
 |-----------|-------|
-| **Datasets** | 5k vectors (fair comparison) |
+| **Datasets** | 50k vectors (realistic scale) |
 | **Dimensions** | 768 (OpenAI/Cohere-sized) |
-| **Data Type** | Clustered embeddings (25 clusters) |
+| **Data Type** | Clustered embeddings (50 clusters) |
 | **Queries** | 100 queries |
 | **Top-K** | 10 results |
 | **Metric** | Cosine similarity |
@@ -68,13 +69,14 @@ Both databases measured with **total time including index construction**:
 
 This ensures an apples-to-apples comparison of the complete ingestion pipeline.
 
-### Results: Docker vs Docker (Fair Comparison)
+### Results: Docker vs Docker (Fair Comparison - 50k vectors)
 
 | Metric | pgvector | VelesDB REST | Winner |
 |--------|----------|--------------|--------|
-| **Insert + Index (5k)** | 9.03s | **2.72s** | **VelesDB 3.3x** ✅ |
-| **Search P50** | **3.5ms** | 5.5ms | pgvector |
-| **Recall@10** | **100%** | 98.7% | pgvector |
+| **Insert + Index** | 163.47s | **23.95s** | **VelesDB 6.8x** ✅ |
+| **Search P50** | 50.7ms | 50.3ms | ~Equal |
+| **Search P99** | 61.4ms | 60.5ms | ~Equal |
+| **Recall@10** | **100%** | 97.4% | pgvector |
 
 ### Embedded Mode (VelesDB's Strength)
 
@@ -84,9 +86,9 @@ This ensures an apples-to-apples comparison of the complete ingestion pipeline.
 
 ### Key Findings
 
-**Insertion (v0.5.0):**
-- VelesDB **3.2x faster** than pgvector for bulk imports
-- SIMD + parallel insertion provides significant speedup
+**Insertion (v0.5.0 Post-Refactoring):**
+- VelesDB **6.8x faster** than pgvector for bulk imports (50k vectors)
+- SIMD + parallel insertion + O(1) storage lookup optimizations
 
 **Search:**
 - Embedded mode: VelesDB 20x faster (no network overhead)
@@ -100,7 +102,7 @@ This ensures an apples-to-apples comparison of the complete ingestion pipeline.
 
 | Use Case | Recommendation | Why |
 |----------|----------------|-----|
-| **Bulk import speed** | **VelesDB** ✅ | 3.3x faster insertion |
+| **Bulk import speed** | **VelesDB** ✅ | 6.8x faster insertion |
 | **Embedded/Desktop apps** | **VelesDB** ✅ | 20x faster (no network) |
 | **Edge/IoT/WASM** | **VelesDB** ✅ | Single binary, no deps |
 | **Real-time search** | Depends | Embedded: VelesDB, REST: pgvector |
@@ -113,7 +115,7 @@ This ensures an apples-to-apples comparison of the complete ingestion pipeline.
 cd benchmarks/
 docker-compose up -d --build  # Start both servers
 pip install -r requirements.txt
-python benchmark_docker.py --vectors 5000 --clusters 25
+python benchmark_docker.py --vectors 50000 --clusters 50
 ```
 
 > 📂 **Benchmark kit**: See [benchmarks/](../benchmarks/) for the complete reproducible test suite.
