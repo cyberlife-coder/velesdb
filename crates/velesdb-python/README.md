@@ -154,9 +154,19 @@ VelesDB is built in Rust with explicit SIMD optimizations:
 | Euclidean | ~47 ns | 21M ops/sec |
 | Hamming | ~6 ns | 164M ops/sec |
 
-- **Sub-millisecond** search latency
-- **4x memory reduction** with SQ8 quantization
-- **Millions of vectors** per collection
+### Benchmark: VelesDB vs pgvector (HNSW)
+
+Tested on clustered embeddings (768D) — realistic AI workloads:
+
+| Dataset Size | VelesDB Recall | VelesDB P50 | pgvector P50 | **Speedup** |
+|--------------|----------------|-------------|--------------|-------------|
+| **1,000** | 100.0% | **0.5ms** | 50ms | **100x** |
+| **10,000** | 99.0% | **2.5ms** | 50ms | **20x** |
+| **100,000** | 97.8% | **4.3ms** | 50ms | **12x** |
+
+- **12-100x faster** than pgvector depending on dataset size
+- **97-100% recall** across all scales
+- **Sub-5ms latency** even at 100k vectors
 
 ## Requirements
 

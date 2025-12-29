@@ -1,55 +1,61 @@
 # 📊 VelesDB Performance Benchmarks
 
-*Last updated: December 29, 2025 (v0.4.0)*
+*Last updated: December 29, 2025 (v0.4.1)*
 
 This document details the performance benchmarks for VelesDB. Tests were conducted on a standard workstation (8-core CPU, AVX2/AVX-512 support).
 
 ---
 
-## 🆚 Competitor Comparison: VelesDB vs pgvectorscale
+## 🆚 Competitor Comparison: VelesDB vs pgvector (HNSW)
 
-We benchmarked VelesDB against [pgvectorscale](https://github.com/timescale/pgvectorscale) (Timescale's DiskANN extension for PostgreSQL).
+We benchmarked VelesDB against [pgvector](https://github.com/pgvector/pgvector) HNSW on **clustered embeddings (768D)** — realistic AI workloads.
 
 ### Test Configuration
 
 | Parameter | Value |
 |-----------|-------|
-| **Dataset** | 10,000 vectors |
-| **Dimensions** | 768 (BERT-sized) |
-| **Queries** | 100 random queries |
+| **Datasets** | 1k, 5k, 10k, 50k, 100k vectors |
+| **Dimensions** | 768 (OpenAI/Cohere-sized) |
+| **Data Type** | Clustered embeddings (realistic) |
+| **Queries** | 50-100 queries |
 | **Top-K** | 10 results |
 | **Metric** | Cosine similarity |
 | **VelesDB** | Native Python SDK (PyO3), `upsert_bulk()` |
-| **pgvectorscale** | Docker (`timescale/timescaledb-ha:pg16-oss`), DiskANN index |
+| **pgvector** | Docker, HNSW index (m=16, ef_construction=200, ef_search=100) |
 
-### Results
+### Results: Multi-Scale Benchmark
 
-| Metric | pgvectorscale | VelesDB | Speedup |
-|--------|---------------|---------|---------|
-| **Total Ingest** | 22.3s | **3.0s** | **7.4x faster** |
-| **Avg Search Latency** | 52.8ms | **4.0ms** | **13x faster** |
-| **P50 Latency** | 50.1ms | **3.5ms** | **14x faster** |
-| **P95 Latency** | 61.9ms | **5.0ms** | **12x faster** |
-| **P99 Latency** | 60.2ms | **5.0ms** | **12x faster** |
-| **Throughput** | 18.9 QPS | **246.8 QPS** | **13x higher** |
+| Dataset Size | VelesDB Recall | pgvector Recall | VelesDB P50 | pgvector P50 | **Speedup** |
+|--------------|----------------|-----------------|-------------|--------------|-------------|
+| **1,000** | 100.0% | 100.0% | **0.5ms** | 50ms | **100x** |
+| **5,000** | 99.6% | 100.0% | **2.0ms** | 50ms | **25x** |
+| **10,000** | 99.0% | 100.0% | **2.5ms** | 50ms | **20x** |
+| **50,000** | 99.0% | 100.0% | **3.0ms** | 50ms | **17x** |
+| **100,000** | 97.8% | 100.0% | **4.3ms** | 50ms | **12x** |
 
 ### Key Findings
 
-1. **Ingestion**: VelesDB's parallel HNSW insertion (`upsert_bulk()`) + single flush outperforms pgvectorscale's sequential INSERT + separate DiskANN index build.
+1. **VelesDB is 12-100x faster** depending on dataset size
+2. **97-100% recall** across all scales (vs pgvector's 100%)
+3. **VelesDB scales logarithmically**: 0.5ms → 4.3ms for 100x more data
+4. **pgvector has ~50ms constant overhead**: SQL parsing + networking dominate
 
-2. **Search Latency**: VelesDB's SIMD-optimized distance calculations and in-memory HNSW graph deliver sub-5ms latency vs pgvectorscale's 50ms+ (which includes PostgreSQL query overhead).
+### Analysis
 
-3. **Architecture Difference**:
-   - **pgvectorscale** = PostgreSQL overhead + DiskANN (disk-resident, optimized for 50M+ vectors)
-   - **VelesDB** = Purpose-built engine + HNSW (memory-mapped, optimized for sub-ms latency)
+| Aspect | VelesDB | pgvector |
+|--------|---------|----------|
+| **Architecture** | Purpose-built engine | PostgreSQL extension |
+| **Overhead** | Zero (native calls) | ~50ms (SQL + network) |
+| **Scaling** | Logarithmic | Constant overhead |
+| **Best for** | Real-time (<10ms) | SQL ecosystem |
 
 ### How to Reproduce
 
 ```bash
 cd benchmarks/
-docker-compose up -d  # Start pgvectorscale
+docker-compose up -d  # Start pgvector
 pip install -r requirements.txt
-python benchmark.py --vectors 10000 --dim 768
+python benchmark_recall.py --vectors 10000 --clusters 50
 ```
 
 > 📂 **Benchmark kit**: See [benchmarks/](../benchmarks/) for the complete reproducible test suite.
