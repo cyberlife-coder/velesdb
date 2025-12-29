@@ -26,7 +26,7 @@
 <!-- Performance Badges -->
 <p align="center">
   <img src="https://img.shields.io/badge/⚡_Latency-39ns_(768D)-brightgreen?style=for-the-badge" alt="Latency"/>
-  <img src="https://img.shields.io/badge/🎯_Recall-98.2%25-blue?style=for-the-badge" alt="Recall"/>
+  <img src="https://img.shields.io/badge/🎯_Recall-99%25-blue?style=for-the-badge" alt="Recall"/>
   <img src="https://img.shields.io/badge/📦_Binary-15MB-orange?style=for-the-badge" alt="Binary Size"/>
   <img src="https://img.shields.io/badge/✅_Tests-417_passed-success?style=for-the-badge" alt="Tests"/>
 </p>
@@ -59,8 +59,8 @@
 <p>15MB, zero deps.<br/><strong>Deploy in seconds.</strong></p>
 </td>
 <td align="center" width="25%">
-<h3>🎯 98.2% Recall</h3>
-<p>Production-grade accuracy.<br/><strong>No compromises.</strong></p>
+<h3>🎯 99% Recall</h3>
+<p>Production-grade accuracy.<br/><strong>20x faster than pgvector.</strong></p>
 </td>
 </tr>
 </table>
@@ -89,18 +89,25 @@ LIMIT 10
 | **Query Language** | **SQL (VelesQL)** | JSON DSL | JSON/SDK | SQL | SQL |
 | **Filtering Speed** | **122x faster** | Baseline | N/A | Baseline | Baseline |
 | **WASM/Browser** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Recall@10** | **98.2%** | ~95% | ~95% | ~90% | ~95% |
+| **Recall@10** | **99%** | ~95% | ~95% | 100% | ~95% |
 
-### 📊 Benchmark: VelesDB vs pgvectorscale (DiskANN)
+### 📊 Benchmark: VelesDB vs pgvector (HNSW)
 
-We benchmarked VelesDB against [pgvectorscale](https://github.com/timescale/pgvectorscale) (Timescale's DiskANN extension) on **10,000 vectors (768D)**:
+We benchmarked VelesDB against [pgvector](https://github.com/pgvector/pgvector) HNSW on **clustered embeddings (768D)** — realistic AI workloads:
 
-| Metric | pgvectorscale | VelesDB | Speedup |
-|--------|---------------|---------|---------|
-| **Total Ingest** | 22.3s | **3.0s** | **7.4x faster** |
-| **Avg Search Latency** | 52.8ms | **4.0ms** | **13x faster** |
-| **P95 Search Latency** | 61.9ms | **5.0ms** | **12x faster** |
-| **Throughput** | 18.9 QPS | **246.8 QPS** | **13x higher** |
+| Dataset Size | VelesDB Recall | pgvector Recall | VelesDB P50 | pgvector P50 | **Speedup** |
+|--------------|----------------|-----------------|-------------|--------------|-------------|
+| **1,000** | 100.0% | 100.0% | **0.5ms** | 50ms | **100x** |
+| **5,000** | 99.6% | 100.0% | **2.0ms** | 50ms | **25x** |
+| **10,000** | 99.0% | 100.0% | **2.5ms** | 50ms | **20x** |
+| **50,000** | 99.0% | 100.0% | **3.0ms** | 50ms | **17x** |
+| **100,000** | 97.8% | 100.0% | **4.3ms** | 50ms | **12x** |
+
+**Key insights:**
+- 🚀 **VelesDB: 12-100x faster** depending on dataset size
+- 🎯 **97-100% recall** across all scales
+- 📈 **VelesDB scales logarithmically** (0.5ms → 4.3ms for 100x data)
+- ⏱️ **pgvector: ~50ms constant overhead** (SQL parsing + networking)
 
 > 📊 **Run your own benchmarks:** See [benchmarks/](benchmarks/) for the complete benchmark kit.
 

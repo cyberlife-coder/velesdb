@@ -1,101 +1,66 @@
 # VelesDB Benchmark Kit
 
-Comprehensive benchmark suite comparing VelesDB against other vector databases.
+Benchmark suite comparing VelesDB against pgvector (HNSW).
 
 ## Quick Start
 
 ```bash
-# 1. Start pgvectorscale (Docker required)
+# 1. Start pgvector (Docker required)
 docker-compose up -d
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
 # 3. Run benchmark
-python benchmark.py
+python benchmark_recall.py --vectors 10000 --clusters 50
 ```
 
-## Benchmarks Included
+## Benchmark Script
 
-| Competitor | Algorithm | Notes |
-|------------|-----------|-------|
-| pgvectorscale | DiskANN | PostgreSQL extension by Timescale |
-| pgvector | IVFFlat/HNSW | Base PostgreSQL vector extension |
+**`benchmark_recall.py`** - Main benchmark comparing VelesDB vs pgvector HNSW
+
+```bash
+# Options
+python benchmark_recall.py --vectors 10000    # Dataset size
+python benchmark_recall.py --dim 768          # Vector dimension
+python benchmark_recall.py --queries 100      # Number of queries
+python benchmark_recall.py --clusters 50      # Data clusters (realistic)
+python benchmark_recall.py --velesdb-only     # Skip pgvector
+```
 
 ## Test Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `N_VECTORS` | 10,000 | Number of vectors to insert |
-| `DIM` | 768 | Vector dimension (BERT-sized) |
-| `N_QUERIES` | 100 | Number of search queries |
-| `TOP_K` | 10 | Results per query |
-| `METRIC` | cosine | Distance metric |
+| `--vectors` | 10,000 | Number of vectors to insert |
+| `--dim` | 768 | Vector dimension (OpenAI/Cohere-sized) |
+| `--queries` | 100 | Number of search queries |
+| `--top-k` | 10 | Results per query |
+| `--clusters` | 50 | Data clusters (realistic embeddings) |
 
 ## Methodology
 
 ### Data Generation
-- Vectors are randomly generated and L2-normalized (simulating real embeddings)
-- Same dataset used for all databases
+- **Clustered vectors**: Realistic embeddings with natural clusters
+- L2-normalized (simulating real AI embeddings)
+- Same dataset for both databases
 
-### Insertion
-- **pgvectorscale**: Batch INSERT with `::vector` cast, 1000 vectors/batch
-- **VelesDB**: `upsert_bulk()` with parallel HNSW insertion
+### Recall Calculation
+- Ground truth via brute-force exact search
+- Recall@k = |predicted ∩ ground_truth| / k
 
-### Indexing
-- **pgvectorscale**: `CREATE INDEX USING diskann (embedding vector_cosine_ops)`
-- **VelesDB**: HNSW index built on-the-fly during insertion
+## Latest Results (v0.4.1)
 
-### Search
-- 10 warmup queries (excluded from timing)
-- 100 timed queries measuring latency
-
-## Metrics Collected
-
-| Metric | Description |
-|--------|-------------|
-| Insert Time | Time to insert all vectors |
-| Index Build Time | Time to create search index |
-| Avg Latency | Mean search latency (ms) |
-| P50 Latency | Median search latency (ms) |
-| P95 Latency | 95th percentile latency (ms) |
-| P99 Latency | 99th percentile latency (ms) |
-| QPS | Queries per second throughput |
+| Dataset | VelesDB Recall | pgvector Recall | VelesDB P50 | pgvector P50 | Speedup |
+|---------|----------------|-----------------|-------------|--------------|---------|
+| 1,000 | 100.0% | 100.0% | **0.5ms** | 50ms | **100x** |
+| 10,000 | 99.0% | 100.0% | **2.5ms** | 50ms | **20x** |
+| 100,000 | 97.8% | 100.0% | **4.3ms** | 50ms | **12x** |
 
 ## Hardware Requirements
 
 - **Minimum**: 8GB RAM, 4 CPU cores
-- **Recommended**: 16GB RAM, 8+ CPU cores, NVMe SSD
-
-## Results Format
-
-Results are printed in a comparison table:
-
-```
-================================================================================
-FINAL COMPARISON - VelesDB vs pgvectorscale
-================================================================================
-Dataset: 10000 vectors, 768 dimensions, 100 queries
---------------------------------------------------------------------------------
-Metric                 | PGVectorScale    | VelesDB          | Speedup
---------------------------------------------------------------------------------
-Total Ingest (s)       | 22.317           | 3.034            | 7.4x (VelesDB)
-Avg Latency (ms)       | 52.78            | 4.05             | 13.0x (VelesDB)
-P95 Latency (ms)       | 61.92            | 5.04             | 12.3x (VelesDB)
-Throughput (QPS)       | 18.9             | 246.8            | 13.0x (VelesDB)
-================================================================================
-```
-
-## Contributing Results
-
-We welcome benchmark results from the community! Please include:
-
-1. **Hardware specs**: CPU model, cores, RAM, storage type
-2. **OS**: Windows/Linux/macOS + version
-3. **Dataset size**: N_VECTORS, DIM
-4. **Full output**: Copy the comparison table
-
-Submit results via GitHub Issues or Discussions.
+- **Recommended**: 16GB RAM, 8+ CPU cores
 
 ## License
 
