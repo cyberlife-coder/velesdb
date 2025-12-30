@@ -948,6 +948,27 @@ Comprehensive documentation is available on **DeepWiki**:
 
 ---
 
+## ⭐ Support VelesDB
+
+<p align="center">
+  <strong>🌟 If VelesDB helps you build faster AI applications, give us a star!</strong><br/>
+  <em>Si VelesDB vous aide à créer des applications IA plus rapides, offrez-nous une étoile !</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/cyberlife-coder/VelesDB/stargazers">
+    <img src="https://img.shields.io/github/stars/cyberlife-coder/VelesDB?style=for-the-badge&logo=github&color=yellow" alt="GitHub Stars"/>
+  </a>
+</p>
+
+[![Star History Chart](https://api.star-history.com/svg?repos=cyberlife-coder/velesdb&type=Date)](https://star-history.com/#cyberlife-coder/velesdb&Date)
+
+<p align="center">
+  <a href="https://github.com/cyberlife-coder/VelesDB">⭐ Star on GitHub</a> — It helps us grow and motivates development!
+</p>
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
@@ -1055,9 +1076,16 @@ ELv2 is a source-available license that allows free use, modification, and distr
 ---
 
 <p align="center">
-  <strong>Built with ❤️ and 🦀 Rust</strong><br/>
-  <a href="https://github.com/cyberlife-coder/VelesDB">GitHub</a> •
-  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/">Documentation</a> •
-  <a href="https://github.com/cyberlife-coder/VelesDB/issues">Issues</a> •
-  <a href="https://github.com/cyberlife-coder/VelesDB/releases">Releases</a>
+  <strong>Built with ❤️ and 🦀 Rust by <a href="https://github.com/cyberlife-coder">Wiscale France</a></strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/cyberlife-coder/VelesDB">⭐ GitHub</a> •
+  <a href="https://deepwiki.com/cyberlife-coder/VelesDB/">📖 Documentation</a> •
+  <a href="https://github.com/cyberlife-coder/VelesDB/issues">🐛 Issues</a> •
+  <a href="https://github.com/cyberlife-coder/VelesDB/releases">📦 Releases</a>
+</p>
+
+<p align="center">
+  <sub>Don't forget to ⭐ star the repo if you find VelesDB useful!</sub>
 </p>
