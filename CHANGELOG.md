@@ -5,6 +5,36 @@ All notable changes to VelesDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2025-12-30
+
+### 🎯 Quantization & Integrations
+
+#### Added
+- **SQ8 SIMD Distance Functions** - AVX2-optimized dot product, Euclidean, cosine for quantized vectors
+  - `dot_product_quantized_simd()` - ~1.7x faster than scalar
+  - `euclidean_squared_quantized_simd()`
+  - `cosine_similarity_quantized_simd()`
+- **StorageMode API** - Configurable vector storage at collection creation
+  - `POST /collections` now accepts `storage_mode`: `full`, `sq8`, `binary`
+  - `db.create_collection_with_options(name, dim, metric, StorageMode::SQ8)`
+- **LlamaIndex Integration** - `llamaindex-velesdb` Python package
+  - `VelesDBVectorStore` compatible with LlamaIndex pipelines
+  - Full test suite and documentation
+- **Quantization Benchmarks** - Criterion benchmarks for SQ8 performance
+- **4 New E2E Tests** - API tests for storage_mode functionality
+
+#### Documentation
+- `docs/QUANTIZATION.md` - Complete French guide for SQ8/Binary quantization
+- Updated README.md with quantization section (English)
+- Updated `simd_explicit.rs` docs for ARM NEON/WASM support
+
+#### Performance
+- **SQ8 Memory**: 4x reduction (768D: 3KB → 770 bytes)
+- **Binary Memory**: 32x reduction (768D: 3KB → 96 bytes)
+- **No performance regression** on existing SIMD operations
+
+---
+
 ## [0.5.1] - 2025-12-30
 
 ### 🔐 On-Premises & Documentation

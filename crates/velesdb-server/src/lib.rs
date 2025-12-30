@@ -149,6 +149,8 @@ pub struct CollectionResponse {
     pub metric: String,
     /// Number of points in the collection.
     pub point_count: usize,
+    /// Storage mode (full, sq8, binary).
+    pub storage_mode: String,
 }
 
 /// Request to upsert points.
@@ -429,6 +431,7 @@ pub async fn get_collection(
                 dimension: config.dimension,
                 metric: format!("{:?}", config.metric).to_lowercase(),
                 point_count: config.point_count,
+                storage_mode: format!("{:?}", config.storage_mode).to_lowercase(),
             })
             .into_response()
         }
