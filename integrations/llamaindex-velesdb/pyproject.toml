@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llama-index-vector-stores-velesdb"
+version = "0.1.0"
+description = "LlamaIndex integration for VelesDB vector database"
+readme = "README.md"
+license = "ELv2"
+requires-python = ">=3.9"
+authors = [
+    { name = "VelesDB Team" }
+]
+keywords = ["velesdb", "llamaindex", "vector-store", "embeddings", "rag"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "llama-index-core>=0.10.0",
+    "velesdb>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[project.urls]
+Homepage = "https://github.com/cyberlife-coder/VelesDB"
+Documentation = "https://github.com/cyberlife-coder/VelesDB#readme"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llamaindex_velesdb"]
