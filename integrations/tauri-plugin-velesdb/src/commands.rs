@@ -819,4 +819,159 @@ mod tests {
         assert!(json.contains("\"score\":0.95"));
         assert!(json.contains("\"title\":\"Test\""));
     }
+
+    #[test]
+    fn test_get_points_request_deserialize() {
+        // Arrange
+        let json = r#"{"collection": "docs", "ids": [1, 2, 3]}"#;
+
+        // Act
+        let request: GetPointsRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(request.collection, "docs");
+        assert_eq!(request.ids, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_delete_points_request_deserialize() {
+        // Arrange
+        let json = r#"{"collection": "docs", "ids": [1, 2]}"#;
+
+        // Act
+        let request: DeletePointsRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(request.collection, "docs");
+        assert_eq!(request.ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_batch_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"collection": "docs", "vectors": [[0.1, 0.2], [0.3, 0.4]]}"#;
+
+        // Act
+        let request: BatchSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(request.collection, "docs");
+        assert_eq!(request.vectors.len(), 2);
+        assert_eq!(request.vectors[0], vec![0.1, 0.2]);
+        assert_eq!(request.top_k, 10); // default
+    }
+
+    #[test]
+    fn test_point_output_serialize() {
+        // Arrange
+        let point = PointOutput {
+            id: 1,
+            vector: vec![0.1, 0.2, 0.3],
+            payload: Some(serde_json::json!({"key": "value"})),
+        };
+
+        // Act
+        let json = serde_json::to_string(&point).unwrap();
+
+        // Assert
+        assert!(json.contains("\"id\":1"));
+        assert!(json.contains("\"vector\":[0.1,0.2,0.3]"));
+        assert!(json.contains("\"key\":\"value\""));
+    }
+
+    #[test]
+    fn test_text_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"collection": "docs", "query": "machine learning"}"#;
+
+        // Act
+        let request: TextSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(request.collection, "docs");
+        assert_eq!(request.query, "machine learning");
+        assert_eq!(request.top_k, 10); // default
+    }
+
+    #[test]
+    fn test_hybrid_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"collection": "docs", "vector": [0.1, 0.2], "query": "test"}"#;
+
+        // Act
+        let request: HybridSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(request.collection, "docs");
+        assert_eq!(request.vector, vec![0.1, 0.2]);
+        assert_eq!(request.query, "test");
+        assert_eq!(request.top_k, 10); // default
+        assert!((request.vector_weight - 0.5).abs() < f32::EPSILON); // default
+    }
+
+    #[test]
+    fn test_parse_storage_mode_full() {
+        // Arrange & Act
+        let result = parse_storage_mode("full");
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_storage_mode_sq8() {
+        // Arrange & Act
+        let result = parse_storage_mode("sq8");
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_storage_mode_binary() {
+        // Arrange & Act
+        let result = parse_storage_mode("binary");
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_storage_mode_invalid() {
+        // Arrange & Act
+        let result = parse_storage_mode("unknown");
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_storage_mode_to_string() {
+        use velesdb_core::StorageMode;
+
+        // Arrange & Act & Assert
+        assert_eq!(storage_mode_to_string(StorageMode::Full), "full");
+        assert_eq!(storage_mode_to_string(StorageMode::SQ8), "sq8");
+        assert_eq!(storage_mode_to_string(StorageMode::Binary), "binary");
+    }
+
+    #[test]
+    fn test_search_response_serialize() {
+        // Arrange
+        let response = SearchResponse {
+            results: vec![SearchResult {
+                id: 1,
+                score: 0.9,
+                payload: None,
+            }],
+            timing_ms: 1.5,
+        };
+
+        // Act
+        let json = serde_json::to_string(&response).unwrap();
+
+        // Assert
+        assert!(json.contains("\"results\""));
+        assert!(json.contains("\"timingMs\":1.5"));
+    }
 }

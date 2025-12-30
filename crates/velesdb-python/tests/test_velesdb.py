@@ -298,6 +298,246 @@ class TestNumpySupport:
         assert count == 2
 
 
+class TestTextSearch:
+    """Tests for BM25 text search (WIS-42)."""
+
+    def test_text_search_basic(self, temp_db_path):
+        """Test basic text search functionality."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("text_search_test", dimension=4)
+        
+        # Insert documents with text payloads
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0], "payload": {"text": "machine learning algorithms"}},
+            {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0], "payload": {"text": "deep learning neural networks"}},
+            {"id": 3, "vector": [0.0, 0.0, 1.0, 0.0], "payload": {"text": "natural language processing"}},
+        ])
+        
+        results = collection.text_search("learning", top_k=2)
+        
+        assert len(results) <= 2
+        # Results should have id, score, payload
+        if len(results) > 0:
+            assert "id" in results[0]
+            assert "score" in results[0]
+
+    def test_text_search_no_results(self, temp_db_path):
+        """Test text search with no matching results."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("text_no_match", dimension=4)
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0], "payload": {"text": "hello world"}},
+        ])
+        
+        results = collection.text_search("xyznonexistent", top_k=10)
+        assert isinstance(results, list)
+
+
+class TestHybridSearch:
+    """Tests for hybrid search combining vector and text (WIS-43)."""
+
+    def test_hybrid_search_basic(self, temp_db_path):
+        """Test basic hybrid search functionality."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("hybrid_test", dimension=4, metric="cosine")
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0], "payload": {"text": "machine learning"}},
+            {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0], "payload": {"text": "deep learning"}},
+            {"id": 3, "vector": [0.9, 0.1, 0.0, 0.0], "payload": {"text": "supervised learning"}},
+        ])
+        
+        results = collection.hybrid_search(
+            vector=[1.0, 0.0, 0.0, 0.0],
+            query="learning",
+            top_k=3,
+            vector_weight=0.5
+        )
+        
+        assert len(results) <= 3
+        if len(results) > 0:
+            assert "id" in results[0]
+            assert "score" in results[0]
+
+    def test_hybrid_search_vector_weight(self, temp_db_path):
+        """Test hybrid search with different vector weights."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("hybrid_weight", dimension=4)
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0], "payload": {"text": "alpha"}},
+            {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0], "payload": {"text": "beta"}},
+        ])
+        
+        # High vector weight
+        results_vec = collection.hybrid_search([1.0, 0.0, 0.0, 0.0], "beta", top_k=2, vector_weight=0.9)
+        # Low vector weight
+        results_text = collection.hybrid_search([1.0, 0.0, 0.0, 0.0], "beta", top_k=2, vector_weight=0.1)
+        
+        assert isinstance(results_vec, list)
+        assert isinstance(results_text, list)
+
+
+class TestBatchSearch:
+    """Tests for batch search functionality (WIS-44)."""
+
+    def test_batch_search_basic(self, temp_db_path):
+        """Test basic batch search with multiple queries."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("batch_test", dimension=4, metric="cosine")
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0]},
+            {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0]},
+            {"id": 3, "vector": [0.0, 0.0, 1.0, 0.0]},
+            {"id": 4, "vector": [0.0, 0.0, 0.0, 1.0]},
+        ])
+        
+        queries = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ]
+        
+        batch_results = collection.batch_search(queries, top_k=2)
+        
+        assert len(batch_results) == 2  # One result list per query
+        assert len(batch_results[0]) <= 2
+        assert len(batch_results[1]) <= 2
+        
+        # First query should match id=1 best
+        assert batch_results[0][0]["id"] == 1
+        # Second query should match id=2 best
+        assert batch_results[1][0]["id"] == 2
+
+    def test_batch_search_empty_queries(self, temp_db_path):
+        """Test batch search with empty query list."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("batch_empty", dimension=4)
+        
+        collection.upsert([{"id": 1, "vector": [1.0, 0.0, 0.0, 0.0]}])
+        
+        batch_results = collection.batch_search([], top_k=5)
+        assert batch_results == []
+
+    def test_batch_search_single_query(self, temp_db_path):
+        """Test batch search with single query."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("batch_single", dimension=4)
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0]},
+            {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0]},
+        ])
+        
+        batch_results = collection.batch_search([[1.0, 0.0, 0.0, 0.0]], top_k=2)
+        
+        assert len(batch_results) == 1
+        assert batch_results[0][0]["id"] == 1
+
+
+class TestStorageMode:
+    """Tests for storage mode (quantization) support (WIS-45)."""
+
+    def test_create_collection_full_mode(self, temp_db_path):
+        """Test creating collection with full storage mode (default)."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("full_mode", dimension=4, storage_mode="full")
+        
+        assert collection is not None
+        info = collection.info()
+        assert info["storage_mode"] == "full"
+
+    def test_create_collection_sq8_mode(self, temp_db_path):
+        """Test creating collection with SQ8 quantization."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("sq8_mode", dimension=4, storage_mode="sq8")
+        
+        assert collection is not None
+        info = collection.info()
+        assert info["storage_mode"] == "sq8"
+
+    def test_create_collection_binary_mode(self, temp_db_path):
+        """Test creating collection with binary quantization."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("binary_mode", dimension=4, storage_mode="binary")
+        
+        assert collection is not None
+        info = collection.info()
+        assert info["storage_mode"] == "binary"
+
+    def test_storage_mode_search_accuracy(self, temp_db_path):
+        """Test that search works correctly with different storage modes."""
+        db = velesdb.Database(temp_db_path)
+        
+        for mode in ["full", "sq8", "binary"]:
+            collection = db.create_collection(f"mode_{mode}", dimension=4, storage_mode=mode)
+            
+            collection.upsert([
+                {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0]},
+                {"id": 2, "vector": [0.0, 1.0, 0.0, 0.0]},
+            ])
+            
+            results = collection.search([1.0, 0.0, 0.0, 0.0], top_k=1)
+            assert len(results) == 1
+            assert results[0]["id"] == 1
+
+    def test_invalid_storage_mode(self, temp_db_path):
+        """Test creating collection with invalid storage mode."""
+        db = velesdb.Database(temp_db_path)
+        
+        with pytest.raises(ValueError):
+            db.create_collection("invalid_mode", dimension=4, storage_mode="invalid")
+
+
+class TestDistanceMetrics:
+    """Tests for all distance metrics including Hamming and Jaccard (WIS-46)."""
+
+    def test_hamming_metric(self, temp_db_path):
+        """Test Hamming distance metric."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("hamming_test", dimension=4, metric="hamming")
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 0.0, 0.0, 0.0]},
+            {"id": 2, "vector": [1.0, 1.0, 0.0, 0.0]},
+            {"id": 3, "vector": [1.0, 1.0, 1.0, 0.0]},
+        ])
+        
+        results = collection.search([1.0, 0.0, 0.0, 0.0], top_k=3)
+        assert len(results) == 3
+        # ID 1 should be closest (identical)
+        assert results[0]["id"] == 1
+
+    def test_jaccard_metric(self, temp_db_path):
+        """Test Jaccard similarity metric."""
+        db = velesdb.Database(temp_db_path)
+        collection = db.create_collection("jaccard_test", dimension=4, metric="jaccard")
+        
+        collection.upsert([
+            {"id": 1, "vector": [1.0, 1.0, 0.0, 0.0]},
+            {"id": 2, "vector": [1.0, 0.0, 0.0, 0.0]},
+            {"id": 3, "vector": [0.0, 0.0, 1.0, 1.0]},
+        ])
+        
+        results = collection.search([1.0, 1.0, 0.0, 0.0], top_k=3)
+        assert len(results) == 3
+        # ID 1 should be closest (identical)
+        assert results[0]["id"] == 1
+
+    def test_all_metrics_create(self, temp_db_path):
+        """Test creating collections with all supported metrics."""
+        db = velesdb.Database(temp_db_path)
+        
+        metrics = ["cosine", "euclidean", "dot", "hamming", "jaccard"]
+        
+        for metric in metrics:
+            collection = db.create_collection(f"metric_{metric}", dimension=4, metric=metric)
+            assert collection is not None
+            info = collection.info()
+            assert info["metric"] == metric
+
+
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
