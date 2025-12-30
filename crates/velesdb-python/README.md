@@ -86,7 +86,7 @@ db.delete_collection("name")
 ```python
 # Get collection info
 info = collection.info()
-# {"name": "documents", "dimension": 768, "metric": "cosine", "point_count": 100}
+# {"name": "documents", "dimension": 768, "metric": "cosine", "storage_mode": "full", "point_count": 100}
 
 # Insert/update vectors (with immediate flush)
 collection.upsert([
@@ -99,8 +99,25 @@ collection.upsert_bulk([
     {"id": i, "vector": vectors[i].tolist()} for i in range(10000)
 ])
 
-# Search
+# Vector search
 results = collection.search(vector=[...], top_k=10)
+
+# Batch search (multiple queries in parallel)
+batch_results = collection.batch_search(
+    vectors=[[0.1, 0.2, ...], [0.3, 0.4, ...]],
+    top_k=5
+)
+
+# Text search (BM25)
+results = collection.text_search(query="machine learning", top_k=10)
+
+# Hybrid search (vector + text with RRF fusion)
+results = collection.hybrid_search(
+    vector=[0.1, 0.2, ...],
+    query="machine learning",
+    top_k=10,
+    vector_weight=0.7  # 0.0 = text only, 1.0 = vector only
+)
 
 # Get specific points
 points = collection.get([1, 2, 3])
@@ -114,6 +131,27 @@ is_empty = collection.is_empty()
 # Flush to disk
 collection.flush()
 ```
+
+### Storage Modes (Quantization)
+
+Reduce memory usage with vector quantization:
+
+```python
+# Full precision (default) - 4 bytes per dimension
+collection = db.create_collection("full", dimension=768, storage_mode="full")
+
+# SQ8 quantization - 1 byte per dimension (4x compression)
+collection = db.create_collection("sq8", dimension=768, storage_mode="sq8")
+
+# Binary quantization - 1 bit per dimension (32x compression)
+collection = db.create_collection("binary", dimension=768, storage_mode="binary")
+```
+
+| Mode | Memory per Vector (768D) | Compression | Best For |
+|------|-------------------------|-------------|----------|
+| `full` | 3,072 bytes | 1x | Maximum accuracy |
+| `sq8` | 768 bytes | 4x | Good accuracy/memory balance |
+| `binary` | 96 bytes | 32x | Edge/IoT, massive scale |
 
 ### Bulk Loading Performance
 

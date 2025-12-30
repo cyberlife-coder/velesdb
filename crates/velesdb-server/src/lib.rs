@@ -1326,4 +1326,218 @@ mod tests {
             "OpenAPI spec should be substantial"
         );
     }
+
+    #[test]
+    fn test_openapi_has_all_metrics_documented() {
+        // Arrange
+        let openapi = ApiDoc::openapi();
+        let json = openapi.to_json().expect("Failed to serialize OpenAPI spec");
+
+        // Assert - all distance metrics documented
+        assert!(json.contains("cosine"), "Should document cosine metric");
+        assert!(
+            json.contains("euclidean"),
+            "Should document euclidean metric"
+        );
+        assert!(json.contains("dot"), "Should document dot product metric");
+        assert!(json.contains("hamming"), "Should document hamming metric");
+        assert!(json.contains("jaccard"), "Should document jaccard metric");
+    }
+
+    #[test]
+    fn test_openapi_has_storage_mode_documented() {
+        // Arrange
+        let openapi = ApiDoc::openapi();
+        let json = openapi.to_json().expect("Failed to serialize OpenAPI spec");
+
+        // Assert - storage mode is documented
+        assert!(
+            json.contains("storage_mode"),
+            "Should document storage_mode parameter"
+        );
+    }
+
+    #[test]
+    fn test_openapi_has_search_types_documented() {
+        // Arrange
+        let openapi = ApiDoc::openapi();
+        let json = openapi.to_json().expect("Failed to serialize OpenAPI spec");
+
+        // Assert - all search types documented
+        assert!(json.contains("text_search"), "Should document text search");
+        assert!(
+            json.contains("hybrid_search"),
+            "Should document hybrid search"
+        );
+        assert!(json.contains("batch"), "Should document batch search");
+    }
+
+    #[test]
+    fn test_create_collection_request_default_metric() {
+        // Arrange
+        let json = r#"{"name": "test", "dimension": 128}"#;
+
+        // Act
+        let req: CreateCollectionRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.metric, "cosine");
+    }
+
+    #[test]
+    fn test_create_collection_request_with_hamming() {
+        // Arrange
+        let json = r#"{"name": "test", "dimension": 128, "metric": "hamming"}"#;
+
+        // Act
+        let req: CreateCollectionRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.metric, "hamming");
+    }
+
+    #[test]
+    fn test_create_collection_request_with_jaccard() {
+        // Arrange
+        let json = r#"{"name": "test", "dimension": 128, "metric": "jaccard"}"#;
+
+        // Act
+        let req: CreateCollectionRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.metric, "jaccard");
+    }
+
+    #[test]
+    fn test_create_collection_request_with_storage_mode() {
+        // Arrange
+        let json = r#"{"name": "test", "dimension": 128, "storage_mode": "sq8"}"#;
+
+        // Act
+        let req: CreateCollectionRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.storage_mode, "sq8");
+    }
+
+    #[test]
+    fn test_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"vector": [0.1, 0.2, 0.3], "top_k": 5}"#;
+
+        // Act
+        let req: SearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.vector, vec![0.1, 0.2, 0.3]);
+        assert_eq!(req.top_k, 5);
+    }
+
+    #[test]
+    fn test_batch_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"searches": [{"vector": [0.1, 0.2], "top_k": 3}]}"#;
+
+        // Act
+        let req: BatchSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.searches.len(), 1);
+        assert_eq!(req.searches[0].top_k, 3);
+    }
+
+    #[test]
+    fn test_text_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"query": "machine learning", "top_k": 10}"#;
+
+        // Act
+        let req: TextSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.query, "machine learning");
+        assert_eq!(req.top_k, 10);
+    }
+
+    #[test]
+    fn test_hybrid_search_request_deserialize() {
+        // Arrange
+        let json = r#"{"vector": [0.1, 0.2], "query": "test", "top_k": 5}"#;
+
+        // Act
+        let req: HybridSearchRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.vector, vec![0.1, 0.2]);
+        assert_eq!(req.query, "test");
+        assert_eq!(req.top_k, 5);
+    }
+
+    #[test]
+    fn test_upsert_points_request_deserialize() {
+        // Arrange
+        let json = r#"{"points": [{"id": 1, "vector": [0.1, 0.2]}]}"#;
+
+        // Act
+        let req: UpsertPointsRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(req.points.len(), 1);
+        assert_eq!(req.points[0].id, 1);
+    }
+
+    #[test]
+    fn test_collection_response_serialize() {
+        // Arrange
+        let resp = CollectionResponse {
+            name: "test".to_string(),
+            dimension: 128,
+            metric: "cosine".to_string(),
+            storage_mode: "full".to_string(),
+            point_count: 100,
+        };
+
+        // Act
+        let json = serde_json::to_string(&resp).unwrap();
+
+        // Assert
+        assert!(json.contains("\"name\":\"test\""));
+        assert!(json.contains("\"dimension\":128"));
+        assert!(json.contains("\"metric\":\"cosine\""));
+        assert!(json.contains("\"storage_mode\":\"full\""));
+        assert!(json.contains("\"point_count\":100"));
+    }
+
+    #[test]
+    fn test_search_response_serialize() {
+        // Arrange
+        let resp = SearchResponse {
+            results: vec![SearchResultResponse {
+                id: 1,
+                score: 0.95,
+                payload: None,
+            }],
+        };
+
+        // Act
+        let json = serde_json::to_string(&resp).unwrap();
+
+        // Assert
+        assert!(json.contains("\"results\""));
+        assert!(json.contains("\"id\":1"));
+    }
+
+    #[test]
+    fn test_error_response_serialize() {
+        // Arrange
+        let resp = ErrorResponse {
+            error: "Test error".to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_string(&resp).unwrap();
+
+        // Assert
+        assert!(json.contains("\"error\":\"Test error\""));
+    }
 }

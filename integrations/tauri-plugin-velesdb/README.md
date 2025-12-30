@@ -62,7 +62,8 @@ await invoke('plugin:velesdb|create_collection', {
   request: {
     name: 'documents',
     dimension: 768,
-    metric: 'cosine'  // cosine, euclidean, dot, hamming, jaccard
+    metric: 'cosine',  // cosine, euclidean, dot, hamming, jaccard
+    storageMode: 'full'  // full, sq8, binary
   }
 });
 
@@ -144,10 +145,21 @@ await invoke('plugin:velesdb|delete_collection', { name: 'documents' });
 | `list_collections` | List all collections |
 | `get_collection` | Get info about a collection |
 | `upsert` | Insert or update vectors |
+| `get_points` | Retrieve points by IDs |
+| `delete_points` | Delete points by IDs |
 | `search` | Vector similarity search |
+| `batch_search` | Batch vector search (multiple queries) |
 | `text_search` | BM25 full-text search |
 | `hybrid_search` | Combined vector + text search |
 | `query` | Execute VelesQL query |
+
+### Storage Modes
+
+| Mode | Compression | Best For |
+|------|-------------|----------|
+| `full` | 1x | Maximum accuracy |
+| `sq8` | 4x | Good accuracy/memory balance |
+| `binary` | 32x | Edge/IoT, massive scale |
 
 ### Distance Metrics
 
