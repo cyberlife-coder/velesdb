@@ -1,10 +1,10 @@
 # 📊 VelesDB Performance Benchmarks
 
-*Last updated: December 30, 2025 (v0.5.0)*
+*Last updated: December 30, 2025 (v0.5.1)*
 
 ---
 
-## 🚀 v0.5.0 Headline
+## 🚀 v0.5.1 Headline
 
 | Metric | pgvector | VelesDB | Winner |
 |--------|----------|---------|--------|
@@ -79,7 +79,7 @@ let query = cache.parse("SELECT * FROM docs LIMIT 10")?;
 
 ---
 
-## 🔥 v0.5.0 Optimizations
+## 🔥 v0.5.1 Optimizations
 
 - **SIMD-accelerated HNSW** — AVX2/SSE via `simdeez_f`
 - **Parallel insertion** — Rayon-based graph construction
