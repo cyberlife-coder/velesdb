@@ -91,7 +91,7 @@ LIMIT 10
 | **WASM/Browser** | ✅ | ❌ | ❌ | ❌ |
 | **Recall@10** | **98.8%** | ~95% | ~95% | 100% |
 
-### 📊 Benchmark: VelesDB vs pgvector (v0.5.0)
+### 📊 Benchmark: VelesDB vs pgvector (v0.5.1)
 
 **50,000 vectors, 768D, Docker** — [Full benchmark](docs/BENCHMARKS.md)
 
@@ -204,7 +204,7 @@ curl -X POST http://localhost:8080/collections \
 Download the MSI installer from [GitHub Releases](https://github.com/cyberlife-coder/VelesDB/releases):
 
 ```
-velesdb-0.3.2-x86_64.msi
+velesdb-0.5.1-x86_64.msi
 ```
 
 **Features:**
@@ -215,7 +215,7 @@ velesdb-0.3.2-x86_64.msi
 
 **Silent install:**
 ```powershell
-msiexec /i velesdb-0.3.2-x86_64.msi /quiet ADDTOPATH=1
+msiexec /i velesdb-0.5.1-x86_64.msi /quiet ADDTOPATH=1
 ```
 
 ### Option 2: Linux Package (.deb)
@@ -224,7 +224,7 @@ Download from [GitHub Releases](https://github.com/cyberlife-coder/VelesDB/relea
 
 ```bash
 # Install
-sudo dpkg -i velesdb-0.3.2-amd64.deb
+sudo dpkg -i velesdb-0.5.1-amd64.deb
 
 # Binaries installed to /usr/bin
 velesdb --version
@@ -295,7 +295,7 @@ velesdb repl
 
 # Verify server is running
 curl http://localhost:8080/health
-# {"status":"healthy","version":"0.3.2"}
+# {"status":"healthy","version":"0.5.1"}
 ```
 
 📖 **Full installation guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
