@@ -1016,38 +1016,29 @@ Looking for a place to start? Check out issues labeled [`good first issue`](http
 
 ## 📊 Roadmap
 
-### v0.1.0 ✅ (Released)
-- [x] HNSW vector index
-- [x] REST API (11 endpoints)
-- [x] VelesQL query language
-- [x] SIMD-optimized distance calculations
-- [x] SQ8 quantization
-- [x] Metadata filtering
-
-### v0.2.0 ✅ (Current)
+### v0.5.1 ✅ (Current)
+- [x] HNSW vector index with auto-tuned parameters
+- [x] REST API (11 endpoints) with OpenAPI/Swagger docs
+- [x] VelesQL query language with complete BNF grammar
+- [x] SIMD-optimized distance calculations (AVX2/SSE/NEON/WASM)
 - [x] Python bindings (PyO3) with NumPy support
 - [x] CLI / REPL for VelesQL
-- [x] LangChain integration (`langchain-velesdb`)
-- [x] **New Metrics**: Hamming (Binary) & Jaccard (Sets)
-- [x] OpenAPI/Swagger docs
+- [x] **Distance Metrics**: Cosine, Euclidean, Dot Product, Hamming, Jaccard
 - [x] **BM25 Full-Text Search** with hybrid search (vector + text)
 - [x] **Tauri Desktop Plugin** for AI-powered desktop apps
 - [x] **WASM Support** for browser-based vector search
-- [x] **Advanced Search Metrics**: NDCG, Hit Rate, MAP, Precision@k
-- [x] **Latency Percentiles**: p50, p95, p99 for production monitoring
-- [x] **VelesQL Specification**: Complete language documentation with BNF grammar
+- [x] **Parallel Batch Search** for high-throughput queries
+- [x] **HNSW Prefetch Hints** for reduced memory latency
 
-### v0.3.0 (Planned)
+### v0.6.0 (Planned)
 - [ ] LlamaIndex integration
 - [ ] Publish to crates.io & PyPI
 - [ ] TypeScript SDK
-- [ ] Multi-tenancy support
 
 ### v1.0.0 (Future)
 - [ ] Production-ready stability
 - [ ] Product Quantization (PQ)
 - [ ] Sparse vector support
-- [ ] API Authentication
 
 ---
 
