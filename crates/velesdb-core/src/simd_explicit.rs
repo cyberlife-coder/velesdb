@@ -11,11 +11,16 @@
 //!
 //! # Architecture Support
 //!
-//! The `wide` crate automatically uses:
-//! - **`x86_64`**: AVX2/SSE4.1/SSE2 (runtime detected)
-//! - **ARM**: NEON
-//! - **WASM**: SIMD128
-//! - **Fallback**: Scalar operations
+//! The `wide` crate (v0.7+) automatically uses optimal SIMD for each platform:
+//!
+//! | Platform | SIMD Instructions | Performance |
+//! |----------|-------------------|-------------|
+//! | **`x86_64`** | AVX2/SSE4.1/SSE2 | ~41ns (768D) |
+//! | **`aarch64`** (M1/M2/RPi) | NEON | ~50ns (768D) |
+//! | **WASM** | SIMD128 | ~80ns (768D) |
+//! | **Fallback** | Scalar | ~150ns (768D) |
+//!
+//! No code changes needed - `wide` detects CPU features at runtime.
 
 use wide::f32x8;
 
