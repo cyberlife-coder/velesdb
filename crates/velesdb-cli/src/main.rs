@@ -319,15 +319,21 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("Collection '{}' not found", collection))?;
 
             let cfg = col.config();
-            let output_path = output.unwrap_or_else(|| PathBuf::from(format!("{}.json", collection)));
+            let output_path =
+                output.unwrap_or_else(|| PathBuf::from(format!("{}.json", collection)));
 
-            println!("Exporting {} records from {}...", cfg.point_count, collection.green());
+            println!(
+                "Exporting {} records from {}...",
+                cfg.point_count,
+                collection.green()
+            );
 
             let mut records = Vec::new();
             let batch_size = 1000;
 
             for batch_start in (0..cfg.point_count).step_by(batch_size) {
-                let ids: Vec<u64> = ((batch_start as u64 + 1)..=((batch_start + batch_size) as u64)).collect();
+                let ids: Vec<u64> =
+                    ((batch_start as u64 + 1)..=((batch_start + batch_size) as u64)).collect();
                 let points = col.get(&ids);
 
                 for point in points.into_iter().flatten() {

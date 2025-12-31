@@ -243,10 +243,9 @@ impl VectorStore {
             }
 
             #[cfg(target_arch = "aarch64")]
-            unsafe {
-                use std::arch::aarch64::_prefetch;
-                let ptr = buffer.as_ptr().add(offset);
-                _prefetch(ptr.cast::<i8>(), 0, 3); // PLDL1KEEP
+            {
+                // Prefetch on aarch64 is currently unstable in std::arch::aarch64
+                // Skipping for now on stable Rust to ensure compatibility
             }
         }
     }

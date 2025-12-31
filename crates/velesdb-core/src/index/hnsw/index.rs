@@ -430,6 +430,10 @@ impl HnswIndex {
                                 std::arch::x86_64::_MM_HINT_T0,
                             );
                         }
+                        #[cfg(not(target_arch = "x86_64"))]
+                        {
+                            let _ = future_vec;
+                        }
                     }
                 }
             }
