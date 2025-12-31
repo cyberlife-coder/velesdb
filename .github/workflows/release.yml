@@ -111,7 +111,8 @@ jobs:
           prefix-key: "release-${{ matrix.target }}"
 
       - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p velesdb-cli -p velesdb-server -p velesdb-migrate
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -215,7 +216,7 @@ jobs:
             local status=$2
             if [ "$status" = "publish" ]; then
               echo "📦 Publishing $crate..."
-              cargo publish -p $crate --allow-dirty || echo "Already published $crate"
+              cargo publish -p $crate --allow-dirty || echo "⚠️ Failed to publish $crate (maybe already exists)"
               sleep 30
             else
               echo "⏭️ Skipping $crate (already published)"
