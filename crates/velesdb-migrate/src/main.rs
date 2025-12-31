@@ -268,8 +268,8 @@ async fn auto_detect_and_generate(
     url: &str,
     collection: &str,
     api_key: Option<&str>,
-    output: &PathBuf,
-    dest_path: &PathBuf,
+    output: &std::path::Path,
+    dest_path: &std::path::Path,
 ) -> anyhow::Result<()> {
     use velesdb_migrate::config::*;
     use velesdb_migrate::connectors::create_connector;

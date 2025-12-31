@@ -246,11 +246,15 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                     println!("  {} {:?}", "Metric:".cyan(), cfg.metric);
                     println!("  {} {}", "Point Count:".cyan(), cfg.point_count);
                     println!("  {} {:?}", "Storage Mode:".cyan(), cfg.storage_mode);
-                    
+
                     // Estimate memory usage
                     let vector_size = cfg.dimension * 4; // f32 = 4 bytes
                     let estimated_mb = (cfg.point_count * vector_size) as f64 / 1_000_000.0;
-                    println!("  {} {:.2} MB (vectors only)", "Est. Memory:".cyan(), estimated_mb);
+                    println!(
+                        "  {} {:.2} MB (vectors only)",
+                        "Est. Memory:".cyan(),
+                        estimated_mb
+                    );
                     println!();
                 }
                 None => {
@@ -285,17 +289,17 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
             }
             let name = parts[1];
             let count: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(5);
-            
+
             match db.get_collection(name) {
                 Some(col) => {
                     let ids: Vec<u64> = (1..=(count as u64 * 2)).collect();
                     let points = col.get(&ids);
-                    
+
                     let mut rows = Vec::new();
                     for point in points.into_iter().flatten().take(count) {
                         let mut row = HashMap::new();
                         row.insert("id".to_string(), serde_json::json!(point.id));
-                        
+
                         // Show vector preview (first 5 dims)
                         let vec_preview: Vec<f32> = point.vector.iter().take(5).copied().collect();
                         let vec_str = if point.vector.len() > 5 {
@@ -304,7 +308,7 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                             format!("{:?}", vec_preview)
                         };
                         row.insert("vector".to_string(), serde_json::json!(vec_str));
-                        
+
                         if let Some(serde_json::Value::Object(map)) = &point.payload {
                             for (k, v) in map {
                                 row.insert(k.clone(), v.clone());
@@ -312,7 +316,7 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                         }
                         rows.push(row);
                     }
-                    
+
                     if rows.is_empty() {
                         println!("No records found.\n");
                     } else {
@@ -337,20 +341,21 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
             let page: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
             let page_size = 10;
             let offset = (page - 1) * page_size;
-            
+
             match db.get_collection(name) {
                 Some(col) => {
                     let total = col.config().point_count;
-                    let total_pages = (total + page_size - 1) / page_size;
-                    
-                    let ids: Vec<u64> = ((offset as u64 + 1)..=(offset as u64 + page_size as u64 * 2)).collect();
+                    let total_pages = total.div_ceil(page_size);
+
+                    let ids: Vec<u64> =
+                        ((offset as u64 + 1)..=(offset as u64 + page_size as u64 * 2)).collect();
                     let points = col.get(&ids);
-                    
+
                     let mut rows = Vec::new();
                     for point in points.into_iter().flatten().take(page_size) {
                         let mut row = HashMap::new();
                         row.insert("id".to_string(), serde_json::json!(point.id));
-                        
+
                         if let Some(serde_json::Value::Object(map)) = &point.payload {
                             for (k, v) in map {
                                 // Truncate long values
@@ -365,17 +370,24 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                         }
                         rows.push(row);
                     }
-                    
-                    println!("\n{} - Page {}/{} ({} total records)", 
-                        name.green(), page, total_pages.max(1), total);
+
+                    println!(
+                        "\n{} - Page {}/{} ({} total records)",
+                        name.green(),
+                        page,
+                        total_pages.max(1),
+                        total
+                    );
                     println!();
-                    
+
                     if rows.is_empty() {
                         println!("No records on this page.\n");
                     } else {
                         print_table(&rows);
-                        println!("\nUse {} to see next page\n", 
-                            format!(".browse {} {}", name, page + 1).yellow());
+                        println!(
+                            "\nUse {} to see next page\n",
+                            format!(".browse {} {}", name, page + 1).yellow()
+                        );
                     }
                 }
                 None => {
@@ -391,23 +403,24 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                 return CommandResult::Continue;
             }
             let name = parts[1];
-            let filename = parts.get(2).map_or_else(
-                || format!("{}.json", name),
-                |s| s.to_string()
-            );
-            
+            let filename = parts
+                .get(2)
+                .map_or_else(|| format!("{}.json", name), |s| s.to_string());
+
             match db.get_collection(name) {
                 Some(col) => {
                     let total = col.config().point_count;
                     println!("Exporting {} records from {}...", total, name.green());
-                    
+
                     let mut records = Vec::new();
                     let batch_size = 1000;
-                    
+
                     for batch_start in (0..total).step_by(batch_size) {
-                        let ids: Vec<u64> = ((batch_start as u64 + 1)..=((batch_start + batch_size) as u64)).collect();
+                        let ids: Vec<u64> = ((batch_start as u64 + 1)
+                            ..=((batch_start + batch_size) as u64))
+                            .collect();
                         let points = col.get(&ids);
-                        
+
                         for point in points.into_iter().flatten() {
                             let mut record = serde_json::Map::new();
                             record.insert("id".to_string(), serde_json::json!(point.id));
@@ -418,11 +431,16 @@ fn handle_command(db: &Database, line: &str, config: &mut ReplConfig) -> Command
                             records.push(serde_json::Value::Object(record));
                         }
                     }
-                    
-                    match std::fs::write(&filename, serde_json::to_string_pretty(&records).unwrap()) {
+
+                    match std::fs::write(&filename, serde_json::to_string_pretty(&records).unwrap())
+                    {
                         Ok(()) => {
-                            println!("{} Exported {} records to {}\n", 
-                                "✓".green(), records.len(), filename.green());
+                            println!(
+                                "{} Exported {} records to {}\n",
+                                "✓".green(),
+                                records.len(),
+                                filename.green()
+                            );
                         }
                         Err(e) => {
                             return CommandResult::Error(format!("Failed to write file: {e}"));
@@ -447,13 +465,28 @@ fn print_help() {
     println!("  {}           Exit the REPL", ".quit".yellow());
     println!("  {}     List all collections", ".collections".yellow());
     println!("  {}     Show collection schema", ".schema <name>".yellow());
-    println!("  {}   Detailed collection stats", ".describe <name>".yellow());
-    println!("  {}      Count records in collection", ".count <name>".yellow());
+    println!(
+        "  {}   Detailed collection stats",
+        ".describe <name>".yellow()
+    );
+    println!(
+        "  {}      Count records in collection",
+        ".count <name>".yellow()
+    );
     println!("  {}  Show N sample records", ".sample <name> [n]".yellow());
-    println!("  {} Browse with pagination", ".browse <name> [page]".yellow());
+    println!(
+        "  {} Browse with pagination",
+        ".browse <name> [page]".yellow()
+    );
     println!("  {} Export to JSON file", ".export <name> [file]".yellow());
-    println!("  {}       Toggle timing display", ".timing on|off".yellow());
-    println!("  {}        Set output format", ".format table|json".yellow());
+    println!(
+        "  {}       Toggle timing display",
+        ".timing on|off".yellow()
+    );
+    println!(
+        "  {}        Set output format",
+        ".format table|json".yellow()
+    );
     println!("  {}          Clear screen", ".clear".yellow());
     println!();
     println!("{}", "VelesQL Examples:".bold().underline());
