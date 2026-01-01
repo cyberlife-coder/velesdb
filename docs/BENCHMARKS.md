@@ -1,14 +1,14 @@
 # 📊 VelesDB Performance Benchmarks
 
-*Last updated: January 1, 2026 (v0.7.0)*
+*Last updated: January 1, 2026 (v0.7.1)*
 
 ---
 
-## 🚀 v0.7.0 Headline
+## 🚀 v0.7.1 Headline
 
 | Metric | Baseline | VelesDB | Winner |
 |--------|----------|---------|--------|
-| **SIMD Cosine (768D)** | 280ns (Naive) | **41ns** | **VelesDB 6.8x** ✅ |
+| **SIMD Dot Product (768D)** | 280ns (Naive) | **45ns** | **VelesDB 6.2x** ✅ |
 | **Search (10K)** | ~50ms (pgvector) | **128µs** | **VelesDB 390x** ✅ |
 | **Recall@10** | 100% | 99.4% | Baseline |
 
@@ -30,9 +30,9 @@
 
 | Operation | Latency | Throughput | Speedup |
 |-----------|---------|------------|----------|
-| **Dot Product** | 41ns | 24M/s | 6.8x |
-| **Euclidean** | 49ns | 20M/s | 5.3x |
-| **Cosine** | 81ns | 12M/s | 3.3x |
+| **Dot Product** | 45ns | 22M/s | 6.2x |
+| **Euclidean** | 47ns | 21M/s | 5.9x |
+| **Cosine** | 79ns | 12M/s | 3.5x |
 | **Hamming** | 6ns | 164M/s | 34x |
 
 ---
@@ -79,8 +79,10 @@ let query = cache.parse("SELECT * FROM docs LIMIT 10")?;
 
 ---
 
-## 🔥 v0.7.0 Optimizations
+## 🔥 v0.7.1 Optimizations
 
+- **32-wide SIMD unrolling** — 4x f32x8 accumulators for maximum ILP
+- **Pre-normalized functions** — `cosine_similarity_normalized()` ~40% faster
 - **SIMD-accelerated HNSW** — AVX2/SSE via `simdeez_f`
 - **Parallel insertion** — Rayon-based graph construction
 - **CPU prefetch hints** — L2 cache warming
