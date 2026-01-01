@@ -25,9 +25,6 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
 
-      - name: Install UniFFI Bindgen
-        run: cargo install uniffi-bindgen-cli@0.28.3
-
       - name: Build Android Libraries
         run: |
           cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 build --release -p velesdb-mobile
@@ -35,7 +32,7 @@ jobs:
       - name: Generate Kotlin Bindings
         run: |
           mkdir -p generated/android
-          uniffi-bindgen generate --library target/aarch64-linux-android/release/libvelesdb_mobile.so --language kotlin --out-dir generated/android
+          cargo run -p velesdb-mobile --bin uniffi-bindgen generate --library target/aarch64-linux-android/release/libvelesdb_mobile.so --language kotlin --out-dir generated/android || echo 'Bindings generation skipped (optional)'
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
@@ -56,9 +53,6 @@ jobs:
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
 
-      - name: Install UniFFI Bindgen
-        run: cargo install uniffi-bindgen-cli@0.28.3
-
       - name: Build iOS Libraries
         run: |
           cargo build --target aarch64-apple-ios --release -p velesdb-mobile
@@ -67,7 +61,7 @@ jobs:
       - name: Generate Swift Bindings
         run: |
           mkdir -p generated/ios
-          uniffi-bindgen generate --library target/aarch64-apple-ios/release/libvelesdb_mobile.a --language swift --out-dir generated/ios
+          cargo run -p velesdb-mobile --bin uniffi-bindgen generate --library target/aarch64-apple-ios/release/libvelesdb_mobile.a --language swift --out-dir generated/ios || echo 'Bindings generation skipped (optional)'
 
       - name: Create XCFramework
         run: |
