@@ -376,11 +376,11 @@ fn cosine_similarity_wide16(a: &[f32], b: &[f32]) -> f32 {
 /// use velesdb_core::simd_avx512::cosine_similarity_normalized;
 ///
 /// // Pre-normalize vectors
-/// let mut a = vec![3.0, 4.0];
-/// let norm_a = (a[0]*a[0] + a[1]*a[1]).sqrt();
+/// let mut a: Vec<f32> = vec![3.0, 4.0];
+/// let norm_a: f32 = (a[0]*a[0] + a[1]*a[1]).sqrt();
 /// a.iter_mut().for_each(|x| *x /= norm_a);
 ///
-/// let mut b = vec![1.0, 0.0];
+/// let b: Vec<f32> = vec![1.0, 0.0];
 /// // b is already normalized
 ///
 /// let similarity = cosine_similarity_normalized(&a, &b);
