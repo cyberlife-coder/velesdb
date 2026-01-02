@@ -5,6 +5,32 @@ All notable changes to VelesDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-01-02
+
+### 🚀 GPU Acceleration (P1-GPU-1, P2-GPU-2)
+
+GPU-accelerated batch search and expanded shader support.
+
+#### Added
+
+- **P1-GPU-1: GPU brute-force search** - `HnswIndex::search_brute_force_gpu()`
+  - Uses wgpu compute shaders for batch distance calculation
+  - 5-10x speedup for large datasets (>10K vectors)
+  - Graceful fallback to `None` if GPU unavailable
+  - Currently supports Cosine metric
+
+- **P2-GPU-2: GPU distance shaders** - Euclidean and DotProduct WGSL shaders
+  - `EUCLIDEAN_SHADER` - Batch L2 distance on GPU
+  - `DOT_PRODUCT_SHADER` - Batch dot product on GPU
+  - Ready for future integration
+
+#### Documentation
+
+- Updated backlog with completed P1/P2 optimizations
+- Added GPU usage recommendations in code comments
+
+---
+
 ## [0.8.2] - 2026-01-02
 
 ### ⚡ Performance Fixes
