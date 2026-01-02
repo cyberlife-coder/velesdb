@@ -181,7 +181,17 @@ db.create_collection_with_options(
 - Search latency: **< 5ms** for 10k vectors
 - Bulk import: **3,300 vectors/sec** with `upsert_bulk()`
 - ColumnStore filtering: **122x faster** than JSON at 100k items
-- Recall@10: **99.4%** with ef_search=256
+
+### Recall by Configuration
+
+| Config | Mode | ef_search | Recall@10 | Latency | Status |
+|--------|------|-----------|-----------|---------|--------|
+| **10K/128D** (Native) | HighRecall | 1024 | **99.2%** | ~8ms | ✅ |
+| **10K/128D** (Native) | Perfect | 2048 | **100.0%** | ~7ms | ✅ |
+| **100K/768D** (Docker) | HighRecall | 1024 | **96.1%** | 73ms | ✅ ≥95% |
+| **100K/768D** (Docker) | Perfect | 2048 | **100.0%** | 42ms | ✅ |
+
+> *Recall varies by dataset size/dimension. ≥95% guaranteed for HighRecall mode.*
 
 > 📊 **Benchmark kit:** See [benchmarks/](../../benchmarks/) for reproducible tests.
 

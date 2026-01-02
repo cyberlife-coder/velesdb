@@ -179,6 +179,15 @@ pub struct SearchRequest {
     /// Number of results to return.
     #[serde(default = "default_top_k")]
     pub top_k: usize,
+    /// HNSW ef_search parameter (higher = better recall, slower).
+    /// Default: 128 (Balanced mode). Use 256+ for high recall.
+    #[serde(default = "default_ef_search")]
+    #[schema(example = 128)]
+    pub ef_search: Option<usize>,
+}
+
+fn default_ef_search() -> Option<usize> {
+    None // Use collection default
 }
 
 /// Request for batch vector search.
@@ -681,7 +690,13 @@ pub async fn search(
         }
     };
 
-    match collection.search(&req.vector, req.top_k) {
+    let search_result = if let Some(ef) = req.ef_search {
+        collection.search_with_ef(&req.vector, req.top_k, ef)
+    } else {
+        collection.search(&req.vector, req.top_k)
+    };
+
+    match search_result {
         Ok(results) => {
             let response = SearchResponse {
                 results: results
