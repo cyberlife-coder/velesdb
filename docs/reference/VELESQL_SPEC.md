@@ -56,6 +56,7 @@ VelesQL is a query language that combines familiar SQL syntax with vector simila
                     [<where_clause>]
                     [<limit_clause>]
                     [<offset_clause>]
+                    [<with_clause>]
 
 <select_list>   ::= "*" | <column_list>
 <column_list>   ::= <column> ("," <column>)*
@@ -97,6 +98,10 @@ VelesQL is a query language that combines familiar SQL syntax with vector simila
 
 <limit_clause>  ::= "LIMIT" <integer>
 <offset_clause> ::= "OFFSET" <integer>
+<with_clause>   ::= "WITH" "(" <option_list> ")"
+<option_list>   ::= <option> ("," <option>)*
+<option>        ::= <identifier> "=" <option_value>
+<option_value>  ::= <string> | <integer> | <float> | <boolean>
 
 <value>         ::= <float> | <integer> | <string> | <boolean> | "NULL" | <parameter>
 <parameter>     ::= "$" <identifier>
@@ -224,6 +229,59 @@ Skip a number of results (for pagination):
 
 ```sql
 SELECT * FROM documents LIMIT 10 OFFSET 20    -- Skip 20, return 10
+```
+
+### WITH (v0.8.0+)
+
+Configure search parameters per-query:
+
+```sql
+-- Set search mode
+SELECT * FROM docs WHERE vector NEAR $v LIMIT 10 WITH (mode = 'high_recall');
+
+-- Set ef_search directly
+SELECT * FROM docs WHERE vector NEAR $v LIMIT 10 WITH (ef_search = 512);
+
+-- Multiple options
+SELECT * FROM docs WHERE vector NEAR $v LIMIT 10 
+WITH (mode = 'accurate', timeout_ms = 5000);
+```
+
+#### Available Options
+
+| Option | Type | Values | Description |
+|--------|------|--------|-------------|
+| `mode` | string | `'fast'`, `'balanced'`, `'accurate'`, `'high_recall'`, `'perfect'` | Search quality preset |
+| `ef_search` | integer | 16-4096 | HNSW ef_search parameter (overrides mode) |
+| `timeout_ms` | integer | 100-300000 | Query timeout in milliseconds |
+| `rerank` | boolean | `true`, `false` | Enable/disable reranking for quantized vectors |
+
+#### Priority
+
+Options follow this priority (highest to lowest):
+1. `WITH` clause options (query-time)
+2. Session settings (REPL `\set`)
+3. Environment variables (`VELESDB_*`)
+4. Configuration file (`velesdb.toml`)
+5. Default values
+
+#### Examples
+
+```sql
+-- Fast mode for autocomplete (low latency)
+SELECT * FROM suggestions WHERE vector NEAR $v LIMIT 5 WITH (mode = 'fast');
+
+-- Perfect mode for validation (100% recall guaranteed)
+SELECT * FROM legal_docs WHERE vector NEAR $v LIMIT 10 WITH (mode = 'perfect');
+
+-- Custom ef_search for fine-tuned recall/latency
+SELECT * FROM products WHERE vector NEAR $v LIMIT 20 WITH (ef_search = 300);
+
+-- Combine with filters
+SELECT * FROM articles 
+WHERE vector NEAR $v AND category = 'science'
+LIMIT 10 
+WITH (mode = 'accurate', timeout_ms = 10000);
 ```
 
 ---

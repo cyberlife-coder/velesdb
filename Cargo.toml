@@ -58,6 +58,10 @@ prost = "0.13"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
+# Configuration
+figment = { version = "0.10", features = ["toml", "env"] }
+toml = "0.8"
+
 # Testing
 criterion = "0.5"
 proptest = "1.5"
