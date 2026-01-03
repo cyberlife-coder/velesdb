@@ -123,7 +123,7 @@ pub struct HnswIndex {
 ///
 /// For indices created via `new()`/`with_params()`, the data is truly owned
 /// and `'static` is accurate.
-enum HnswInner {
+pub(super) enum HnswInner {
     Cosine(Hnsw<'static, f32, DistCosine>),
     Euclidean(Hnsw<'static, f32, DistL2>),
     DotProduct(Hnsw<'static, f32, DistDot>),
@@ -209,6 +209,88 @@ impl HnswInner {
     /// - **`Cosine`**: `(1.0 - distance).clamp(0.0, 1.0)` (similarity in `[0,1]`)
     /// - **`Euclidean`/`Hamming`/`Jaccard`**: raw distance (lower is better)
     /// - **`DotProduct`**: `-distance` (`hnsw_rs` stores negated dot product)
+    #[inline]
+    fn transform_score(&self, raw_distance: f32) -> f32 {
+        match self {
+            Self::Cosine(_) => (1.0 - raw_distance).clamp(0.0, 1.0),
+            Self::Euclidean(_) | Self::Hamming(_) | Self::Jaccard(_) => raw_distance,
+            Self::DotProduct(_) => -raw_distance,
+        }
+    }
+}
+
+// ============================================================================
+// FT-1: HnswBackend trait implementation for HnswInner
+// Delegates to the inherent methods defined above (RF-1)
+// ============================================================================
+
+impl super::backend::HnswBackend for HnswInner {
+    #[inline]
+    fn search(
+        &self,
+        query: &[f32],
+        k: usize,
+        ef_search: usize,
+    ) -> Vec<hnsw_rs::prelude::Neighbour> {
+        // Delegate to inherent method
+        match self {
+            Self::Cosine(hnsw) => hnsw.search(query, k, ef_search),
+            Self::Euclidean(hnsw) | Self::Hamming(hnsw) | Self::Jaccard(hnsw) => {
+                hnsw.search(query, k, ef_search)
+            }
+            Self::DotProduct(hnsw) => hnsw.search(query, k, ef_search),
+        }
+    }
+
+    #[inline]
+    fn insert(&self, data: (&[f32], usize)) {
+        match self {
+            Self::Cosine(hnsw) => hnsw.insert(data),
+            Self::Euclidean(hnsw) | Self::Hamming(hnsw) | Self::Jaccard(hnsw) => hnsw.insert(data),
+            Self::DotProduct(hnsw) => hnsw.insert(data),
+        }
+    }
+
+    #[inline]
+    fn parallel_insert(&self, data: &[(&Vec<f32>, usize)]) {
+        match self {
+            Self::Cosine(hnsw) => hnsw.parallel_insert(data),
+            Self::Euclidean(hnsw) | Self::Hamming(hnsw) | Self::Jaccard(hnsw) => {
+                hnsw.parallel_insert(data);
+            }
+            Self::DotProduct(hnsw) => hnsw.parallel_insert(data),
+        }
+    }
+
+    #[inline]
+    fn set_searching_mode(&mut self, mode: bool) {
+        match self {
+            Self::Cosine(hnsw) => hnsw.set_searching_mode(mode),
+            Self::Euclidean(hnsw) | Self::Hamming(hnsw) | Self::Jaccard(hnsw) => {
+                hnsw.set_searching_mode(mode);
+            }
+            Self::DotProduct(hnsw) => hnsw.set_searching_mode(mode),
+        }
+    }
+
+    #[inline]
+    fn file_dump(&self, path: &std::path::Path, basename: &str) -> Result<(), std::io::Error> {
+        match self {
+            Self::Cosine(hnsw) => hnsw
+                .file_dump(path, basename)
+                .map(|_| ())
+                .map_err(std::io::Error::other),
+            Self::Euclidean(hnsw) | Self::Hamming(hnsw) | Self::Jaccard(hnsw) => hnsw
+                .file_dump(path, basename)
+                .map(|_| ())
+                .map_err(std::io::Error::other),
+            Self::DotProduct(hnsw) => hnsw
+                .file_dump(path, basename)
+                .map(|_| ())
+                .map_err(std::io::Error::other),
+        }
+    }
+
     #[inline]
     fn transform_score(&self, raw_distance: f32) -> f32 {
         match self {
@@ -2180,6 +2262,52 @@ mod tests {
             "Recall@{k} should be >= 80% for HighRecall, got {:.1}%",
             recall * 100.0
         );
+    }
+
+    // =========================================================================
+    // FT-1: Tests for HnswBackend trait implementation
+    // =========================================================================
+
+    #[test]
+    fn test_hnsw_inner_implements_backend_trait() {
+        use super::super::backend::HnswBackend;
+
+        let index = HnswIndex::new(8, DistanceMetric::Cosine);
+        index.insert(1, &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        index.insert(2, &[0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+
+        let inner = index.inner.read();
+
+        // Use trait method via HnswBackend
+        let query = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let results = HnswBackend::search(&**inner, &query, 2, 100);
+
+        assert!(!results.is_empty(), "Trait search should return results");
+    }
+
+    #[test]
+    fn test_hnsw_backend_transform_score() {
+        use super::super::backend::HnswBackend;
+
+        let cosine_index = HnswIndex::new(4, DistanceMetric::Cosine);
+        let euclidean_index = HnswIndex::new(4, DistanceMetric::Euclidean);
+        let dot_index = HnswIndex::new(4, DistanceMetric::DotProduct);
+
+        let cosine_inner = cosine_index.inner.read();
+        let euclidean_inner = euclidean_index.inner.read();
+        let dot_inner = dot_index.inner.read();
+
+        // Cosine: (1.0 - distance).clamp(0.0, 1.0)
+        let cosine_score = HnswBackend::transform_score(&**cosine_inner, 0.3);
+        assert!((cosine_score - 0.7).abs() < 0.01);
+
+        // Euclidean: raw distance
+        let euclidean_score = HnswBackend::transform_score(&**euclidean_inner, 0.5);
+        assert!((euclidean_score - 0.5).abs() < 0.01);
+
+        // DotProduct: -distance
+        let dot_score = HnswBackend::transform_score(&**dot_inner, 0.5);
+        assert!((dot_score - (-0.5)).abs() < 0.01);
     }
 
     // =========================================================================

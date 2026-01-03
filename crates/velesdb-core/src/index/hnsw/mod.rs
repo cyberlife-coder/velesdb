@@ -6,7 +6,9 @@
 //! - `sharded_mappings`: Lock-free concurrent mappings (EPIC-A.1)
 //! - `index`: Main `HnswIndex` implementation
 //! - `vector_store`: Contiguous vector storage for cache locality
+//! - `backend`: FT-1 trait abstraction for HNSW operations
 
+mod backend;
 mod index;
 mod mappings;
 mod params;
@@ -14,6 +16,9 @@ mod sharded_mappings;
 mod sharded_vectors;
 mod vector_store;
 
+// FT-1: Re-export prepared for RF-2 (index.rs split). Will be used after RF-2.
+#[allow(unused_imports)]
+pub use backend::HnswBackend;
 pub use index::HnswIndex;
 pub use params::{HnswParams, SearchQuality};
 
