@@ -9,6 +9,7 @@ First off, thank you for considering contributing to VelesDB! It's people like y
 - [Development Setup](#development-setup)
 - [Pull Request Process](#pull-request-process)
 - [Style Guidelines](#style-guidelines)
+- [Release Process](#release-process)
 
 ## Code of Conduct
 
@@ -147,5 +148,35 @@ Contributors will be recognized in:
 - The project's README
 - Release notes for significant contributions
 - Our Discord community
+
+## Release Process
+
+VelesDB utilise **3 workflows GitHub Actions simplifiés** :
+
+| Workflow | Fonction |
+|----------|----------|
+| `ci.yml` | Tests, lint, security |
+| `release.yml` | Publication complète (binaries, crates.io, PyPI, npm) |
+| `bench-regression.yml` | Benchmarks |
+
+### Publier une release
+
+```bash
+# 1. Mettre à jour version dans Cargo.toml
+# 2. Commit et tag
+git commit -am "release: v0.8.6"
+git tag v0.8.6
+git push origin main v0.8.6
+```
+
+Le workflow `release.yml` publie automatiquement sur :
+- GitHub Releases (binaries)
+- crates.io
+- PyPI
+- npm
+
+📖 Guide complet : [docs/contributing/RELEASE.md](docs/contributing/RELEASE.md)
+
+---
 
 Thank you for contributing to VelesDB! 🦀
