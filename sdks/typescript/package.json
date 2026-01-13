@@ -30,14 +30,17 @@
   },
   "keywords": [
     "velesdb",
-    "vector",
-    "database",
-    "similarity-search",
+    "vector-database",
     "embeddings",
-    "ai",
-    "machine-learning",
+    "rag",
+    "local-first",
+    "ai-memory",
+    "semantic-search",
+    "sqlite-alternative",
     "wasm",
-    "typescript"
+    "typescript",
+    "langchain",
+    "llm"
   ],
   "author": "Wiscale France",
   "license": "MIT",
