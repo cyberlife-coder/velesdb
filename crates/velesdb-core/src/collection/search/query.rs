@@ -1,4 +1,15 @@
 //! VelesQL query execution for Collection.
+//!
+//! # Future Enhancement: HybridExecutionPlan Integration
+//!
+//! The `HybridExecutionPlan` and `choose_hybrid_strategy()` in `planner.rs`
+//! are ready for integration to optimize query execution based on:
+//! - Query pattern (ORDER BY similarity, filters, etc.)
+//! - Runtime statistics (latency, selectivity)
+//! - Over-fetch factor for filtered queries
+//!
+//! TODO: Integrate `QueryPlanner::choose_hybrid_strategy()` into `execute_query()`
+//! to leverage cost-based optimization for complex queries.
 
 use crate::collection::types::Collection;
 use crate::error::{Error, Result};
@@ -256,21 +267,22 @@ impl Collection {
         }
     }
 
-    /// Compute cosine similarity between two vectors.
+    /// Compute similarity/distance between two vectors using the collection's configured metric.
+    ///
+    /// This method respects the collection's `DistanceMetric` configuration:
+    /// - **Cosine**: Returns cosine similarity (higher = more similar)
+    /// - **DotProduct**: Returns dot product (higher = more similar)
+    /// - **Euclidean**: Returns euclidean distance (lower = more similar)
+    /// - **Hamming**: Returns hamming distance (lower = more similar)
+    /// - **Jaccard**: Returns jaccard similarity (higher = more similar)
     fn compute_similarity(&self, a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() || a.is_empty() {
             return 0.0;
         }
 
-        let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-        let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-
-        if norm_a == 0.0 || norm_b == 0.0 {
-            return 0.0;
-        }
-
-        dot / (norm_a * norm_b)
+        // Use the collection's configured metric for consistent behavior
+        let metric = self.config.read().metric;
+        metric.calculate(a, b)
     }
 
     /// Helper to extract MATCH query from any nested condition.
