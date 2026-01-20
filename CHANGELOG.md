@@ -39,6 +39,18 @@ Major release introducing Knowledge Graph storage and VelesQL MATCH clause for g
   - Literal vectors and parameter resolution
   - Threshold-based filtering on search results
 
+- **EPIC-009: Graph Property Index**
+  - `PropertyIndex` for O(1) hash-based equality lookups
+  - `RangeIndex` for O(log n) range queries on ordered values
+  - Index management: `create_property_index`, `create_range_index`, `list_indexes`, `drop_index`
+  - Memory usage tracking per index
+
+- **EPIC-016: SDK Ecosystem Sync**
+  - Property Index propagated to velesdb-server REST API
+  - Property Index propagated to velesdb-python (PyO3 bindings)
+  - Property Index propagated to TypeScript SDK (REST backend)
+  - New endpoints: `POST/GET /collections/{name}/indexes`, `DELETE /collections/{name}/indexes/{label}/{property}`
+
 #### Changed
 
 - **EPIC-007: Python Bindings Refactoring**
@@ -49,6 +61,12 @@ Major release introducing Knowledge Graph storage and VelesQL MATCH clause for g
 - **WASM/Mobile Refactoring**
   - Extracted `filter.rs`, `fusion.rs`, `text_search.rs`, `graph.rs` modules
   - Tests moved to dedicated `lib_tests.rs` files
+
+- **Server Refactoring**
+  - `lib.rs` modularized: 1682 → 289 lines (-83%)
+  - New `types.rs` module (297 lines) for request/response types
+  - New `handlers/` directory with 6 domain modules:
+    - `health.rs`, `collections.rs`, `points.rs`, `search.rs`, `query.rs`, `indexes.rs`
   - Improved code organization following Martin Fowler methodology
 
 #### Fixed
