@@ -620,7 +620,7 @@ impl VectorStore {
     ///
     /// * `query` - Query vector as `Float32Array`
     /// * `threshold` - Similarity threshold value
-    /// * `operator` - Comparison operator: ">" (gt), ">=" (gte), "<" (lt), "<=" (lte), "=" (eq)
+    /// * `operator` - Comparison operator: ">" (gt), ">=" (gte), "<" (lt), "<=" (lte), "=" (eq), "!=" (neq)
     /// * `k` - Maximum number of results
     ///
     /// # Returns
@@ -653,9 +653,10 @@ impl VectorStore {
             "<" | "lt" => Box::new(|score, thresh| score < thresh),
             "<=" | "lte" => Box::new(|score, thresh| score <= thresh),
             "=" | "eq" => Box::new(|score, thresh| (score - thresh).abs() < 0.001),
+            "!=" | "neq" => Box::new(|score, thresh| (score - thresh).abs() >= 0.001),
             _ => {
                 return Err(JsValue::from_str(
-                    "Invalid operator. Use: >, >=, <, <=, = (or gt, gte, lt, lte, eq)",
+                    "Invalid operator. Use: >, >=, <, <=, =, != (or gt, gte, lt, lte, eq, neq)",
                 ))
             }
         };

@@ -48,11 +48,33 @@ impl Collection {
         // 3. Execute query based on extracted components
         let mut results = match (&vector_search, &similarity_condition, &filter_condition) {
             // similarity() function - use vector to search, then filter by threshold
-            (None, Some((field, vec, op, threshold)), _) => {
-                // For now, we use the vector from similarity() for search
-                // and filter results by threshold
-                let candidates = self.search(vec, limit * 2)?; // Get more candidates for filtering
-                self.filter_by_similarity(candidates, field, vec, *op, *threshold, limit)
+            // Also apply any additional metadata filters from the WHERE clause
+            (None, Some((field, vec, op, threshold)), filter_cond) => {
+                // Get more candidates for filtering (both similarity and metadata)
+                let candidates = self.search(vec, limit * 4)?;
+
+                // First filter by similarity threshold
+                let similarity_filtered =
+                    self.filter_by_similarity(candidates, field, vec, *op, *threshold, limit * 2);
+
+                // Then apply any additional metadata filters (e.g., AND category = 'tech')
+                if let Some(cond) = filter_cond {
+                    // Extract non-similarity parts of the condition for metadata filtering
+                    let metadata_filter = Self::extract_metadata_filter(cond);
+                    if let Some(filter_cond) = metadata_filter {
+                        let filter =
+                            crate::filter::Filter::new(crate::filter::Condition::from(filter_cond));
+                        similarity_filtered
+                            .into_iter()
+                            .filter(|r| r.point.payload.as_ref().is_some_and(|p| filter.matches(p)))
+                            .take(limit)
+                            .collect()
+                    } else {
+                        similarity_filtered
+                    }
+                } else {
+                    similarity_filtered
+                }
             }
             (Some(vector), _, Some(ref cond)) => {
                 // Check if condition contains MATCH for hybrid search
@@ -213,6 +235,47 @@ impl Collection {
             }
             Condition::Group(inner) => self.extract_similarity_condition(inner, params),
             _ => Ok(None),
+        }
+    }
+
+    /// Extract non-similarity parts of a condition for metadata filtering.
+    ///
+    /// This removes `SimilarityFilter` conditions from the tree and returns
+    /// only the metadata filter parts (e.g., `category = 'tech'`).
+    fn extract_metadata_filter(
+        condition: &crate::velesql::Condition,
+    ) -> Option<crate::velesql::Condition> {
+        use crate::velesql::Condition;
+
+        match condition {
+            // Remove similarity conditions - they're handled separately
+            Condition::Similarity(_) => None,
+            // For AND: keep both sides if they exist, or just one side
+            Condition::And(left, right) => {
+                let left_filter = Self::extract_metadata_filter(left);
+                let right_filter = Self::extract_metadata_filter(right);
+                match (left_filter, right_filter) {
+                    (Some(l), Some(r)) => Some(Condition::And(Box::new(l), Box::new(r))),
+                    (Some(l), None) => Some(l),
+                    (None, Some(r)) => Some(r),
+                    (None, None) => None,
+                }
+            }
+            // For OR: both sides must exist
+            Condition::Or(left, right) => {
+                let left_filter = Self::extract_metadata_filter(left);
+                let right_filter = Self::extract_metadata_filter(right);
+                match (left_filter, right_filter) {
+                    (Some(l), Some(r)) => Some(Condition::Or(Box::new(l), Box::new(r))),
+                    _ => None, // OR requires both sides
+                }
+            }
+            // Unwrap groups
+            Condition::Group(inner) => {
+                Self::extract_metadata_filter(inner).map(|c| Condition::Group(Box::new(c)))
+            }
+            // Keep all other conditions (comparisons, IN, BETWEEN, etc.)
+            other => Some(other.clone()),
         }
     }
 

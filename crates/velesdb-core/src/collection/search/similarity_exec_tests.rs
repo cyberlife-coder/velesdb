@@ -157,4 +157,74 @@ mod tests {
 
         assert!(result.is_err(), "Should error on missing parameter");
     }
+
+    /// Regression test: similarity() with additional filter conditions.
+    ///
+    /// Bug: similarity() queries were ignoring additional filter conditions
+    /// in the WHERE clause (e.g., `AND category = 'tech'`).
+    #[test]
+    fn test_similarity_with_metadata_filter_applied() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = PathBuf::from(temp_dir.path());
+        let collection = Collection::create(path, 4, DistanceMetric::Cosine).unwrap();
+
+        // Insert points with category metadata
+        let points = vec![
+            Point {
+                id: 1,
+                vector: vec![1.0, 0.0, 0.0, 0.0],
+                payload: Some(serde_json::json!({"category": "tech", "name": "tech_1"})),
+            },
+            Point {
+                id: 2,
+                vector: vec![0.95, 0.05, 0.0, 0.0], // Very similar to query vector
+                payload: Some(serde_json::json!({"category": "sports", "name": "sports_1"})),
+            },
+            Point {
+                id: 3,
+                vector: vec![0.9, 0.1, 0.0, 0.0], // Also similar
+                payload: Some(serde_json::json!({"category": "tech", "name": "tech_2"})),
+            },
+            Point {
+                id: 4,
+                vector: vec![0.5, 0.5, 0.5, 0.5], // Less similar
+                payload: Some(serde_json::json!({"category": "tech", "name": "tech_3"})),
+            },
+        ];
+
+        collection.upsert(points).unwrap();
+
+        // Query: similarity > 0.8 AND category = 'tech'
+        // Should only return tech items with high similarity (id=1, id=3)
+        // Should NOT return id=2 (sports) even though it has high similarity
+        let query =
+            "SELECT * FROM test WHERE similarity(vector, $v) > 0.8 AND category = 'tech' LIMIT 10";
+        let parsed = Parser::parse(query).unwrap();
+
+        let mut params = HashMap::new();
+        params.insert("v".to_string(), serde_json::json!([1.0, 0.0, 0.0, 0.0]));
+
+        let results = collection.execute_query(&parsed, &params).unwrap();
+
+        // All results should be category = 'tech'
+        for result in &results {
+            let payload = result.point.payload.as_ref().expect("Should have payload");
+            let category = payload.get("category").and_then(|v| v.as_str());
+            assert_eq!(
+                category,
+                Some("tech"),
+                "All results should have category='tech', but got {:?} for id={}",
+                category,
+                result.point.id
+            );
+        }
+
+        // id=2 (sports) should NOT be in results even though it has high similarity
+        let ids: Vec<u64> = results.iter().map(|r| r.point.id).collect();
+        assert!(
+            !ids.contains(&2),
+            "id=2 (sports) should be filtered out, but got ids: {:?}",
+            ids
+        );
+    }
 }
