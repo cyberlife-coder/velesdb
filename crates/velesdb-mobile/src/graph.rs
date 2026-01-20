@@ -129,9 +129,15 @@ impl MobileGraphStore {
     }
 
     /// Gets outgoing edges from a node.
+    ///
+    /// # Lock Order
+    ///
+    /// Acquires locks in consistent order: edges → outgoing
+    /// to prevent ABBA deadlock with write operations.
     pub fn get_outgoing(&self, node_id: u64) -> Vec<MobileGraphEdge> {
-        let outgoing = self.outgoing.read().unwrap();
+        // CRITICAL: Lock order must match write operations (edges → outgoing → incoming)
         let edges = self.edges.read().unwrap();
+        let outgoing = self.outgoing.read().unwrap();
 
         outgoing
             .get(&node_id)
@@ -140,9 +146,15 @@ impl MobileGraphStore {
     }
 
     /// Gets incoming edges to a node.
+    ///
+    /// # Lock Order
+    ///
+    /// Acquires locks in consistent order: edges → incoming
+    /// to prevent ABBA deadlock with write operations.
     pub fn get_incoming(&self, node_id: u64) -> Vec<MobileGraphEdge> {
-        let incoming = self.incoming.read().unwrap();
+        // CRITICAL: Lock order must match write operations (edges → outgoing → incoming)
         let edges = self.edges.read().unwrap();
+        let incoming = self.incoming.read().unwrap();
 
         incoming
             .get(&node_id)
