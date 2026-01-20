@@ -27,13 +27,15 @@ impl Collection {
         let stmt = &query.select;
         let limit = usize::try_from(stmt.limit.unwrap_or(10)).unwrap_or(usize::MAX);
 
-        // 1. Extract vector search (NEAR) if present
+        // 1. Extract vector search (NEAR) or similarity() if present
         let mut vector_search = None;
+        let mut similarity_condition = None;
         let mut filter_condition = None;
 
         if let Some(ref cond) = stmt.where_clause {
             let mut extracted_cond = cond.clone();
             vector_search = self.extract_vector_search(&mut extracted_cond, params)?;
+            similarity_condition = self.extract_similarity_condition(&extracted_cond, params)?;
             filter_condition = Some(extracted_cond);
         }
 
@@ -44,28 +46,35 @@ impl Collection {
         }
 
         // 3. Execute query based on extracted components
-        let results = match (vector_search, filter_condition) {
-            (Some(vector), Some(ref cond)) => {
+        let mut results = match (&vector_search, &similarity_condition, &filter_condition) {
+            // similarity() function - use vector to search, then filter by threshold
+            (None, Some((field, vec, op, threshold)), _) => {
+                // For now, we use the vector from similarity() for search
+                // and filter results by threshold
+                let candidates = self.search(vec, limit * 2)?; // Get more candidates for filtering
+                self.filter_by_similarity(candidates, field, vec, *op, *threshold, limit)
+            }
+            (Some(vector), _, Some(ref cond)) => {
                 // Check if condition contains MATCH for hybrid search
                 if let Some(text_query) = Self::extract_match_query(cond) {
                     // Hybrid search: NEAR + MATCH
-                    self.hybrid_search(&vector, &text_query, limit, None)?
+                    self.hybrid_search(vector, &text_query, limit, None)?
                 } else {
                     // Vector search with metadata filter
                     let filter =
                         crate::filter::Filter::new(crate::filter::Condition::from(cond.clone()));
-                    self.search_with_filter(&vector, limit, &filter)?
+                    self.search_with_filter(vector, limit, &filter)?
                 }
             }
-            (Some(vector), None) => {
+            (Some(vector), _, None) => {
                 // Pure vector search
                 if let Some(ef) = ef_search {
-                    self.search_with_ef(&vector, limit, ef)?
+                    self.search_with_ef(vector, limit, ef)?
                 } else {
-                    self.search(&vector, limit)?
+                    self.search(vector, limit)?
                 }
             }
-            (None, Some(cond)) => {
+            (None, None, Some(ref cond)) => {
                 // Metadata-only filter (table scan + filter)
                 // If it's a MATCH condition, use text search
                 if let crate::velesql::Condition::Match(ref m) = cond {
@@ -73,11 +82,12 @@ impl Collection {
                     self.text_search(&m.query, limit)
                 } else {
                     // Generic metadata filter: perform a scan (fallback)
-                    let filter = crate::filter::Filter::new(crate::filter::Condition::from(cond));
+                    let filter =
+                        crate::filter::Filter::new(crate::filter::Condition::from(cond.clone()));
                     self.execute_scan_query(&filter, limit)
                 }
             }
-            (None, None) => {
+            (None, None, None) => {
                 // SELECT * FROM docs LIMIT N (no WHERE)
                 self.execute_scan_query(
                     &crate::filter::Filter::new(crate::filter::Condition::And {
@@ -87,6 +97,9 @@ impl Collection {
                 )
             }
         };
+
+        // Apply limit
+        results.truncate(limit);
 
         Ok(results)
     }
@@ -150,6 +163,93 @@ impl Collection {
             Condition::Group(inner) => self.extract_vector_search(inner, params),
             _ => Ok(None),
         }
+    }
+
+    /// Extract similarity condition from WHERE clause.
+    /// Returns (field, vector, operator, threshold) if found.
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::only_used_in_recursion)]
+    #[allow(clippy::self_only_used_in_recursion)]
+    fn extract_similarity_condition(
+        &self,
+        condition: &crate::velesql::Condition,
+        params: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> Result<Option<(String, Vec<f32>, crate::velesql::CompareOp, f64)>> {
+        use crate::velesql::{Condition, VectorExpr};
+
+        match condition {
+            Condition::Similarity(sim) => {
+                let vec = match &sim.vector {
+                    VectorExpr::Literal(v) => v.clone(),
+                    VectorExpr::Parameter(name) => {
+                        let val = params.get(name).ok_or_else(|| {
+                            Error::Config(format!("Missing query parameter: ${name}"))
+                        })?;
+                        if let serde_json::Value::Array(arr) = val {
+                            #[allow(clippy::cast_possible_truncation)]
+                            arr.iter()
+                                .map(|v| {
+                                    v.as_f64().map(|f| f as f32).ok_or_else(|| {
+                                        Error::Config(format!(
+                                            "Invalid vector parameter ${name}: expected numbers"
+                                        ))
+                                    })
+                                })
+                                .collect::<Result<Vec<f32>>>()?
+                        } else {
+                            return Err(Error::Config(format!(
+                                "Invalid vector parameter ${name}: expected array"
+                            )));
+                        }
+                    }
+                };
+                Ok(Some((sim.field.clone(), vec, sim.operator, sim.threshold)))
+            }
+            Condition::And(left, right) => {
+                if let Some(s) = self.extract_similarity_condition(left, params)? {
+                    return Ok(Some(s));
+                }
+                self.extract_similarity_condition(right, params)
+            }
+            Condition::Group(inner) => self.extract_similarity_condition(inner, params),
+            _ => Ok(None),
+        }
+    }
+
+    /// Filter search results by similarity threshold.
+    ///
+    /// For similarity() function queries, we need to check if results meet the threshold.
+    #[allow(clippy::too_many_arguments)]
+    fn filter_by_similarity(
+        &self,
+        candidates: Vec<SearchResult>,
+        _field: &str,
+        _query_vec: &[f32],
+        op: crate::velesql::CompareOp,
+        threshold: f64,
+        limit: usize,
+    ) -> Vec<SearchResult> {
+        use crate::velesql::CompareOp;
+
+        // The score from HNSW is already cosine similarity (for cosine metric)
+        // Filter results based on threshold and operator
+        let threshold_f32 = threshold as f32;
+
+        candidates
+            .into_iter()
+            .filter(|r| {
+                let score = r.score;
+                match op {
+                    CompareOp::Gt => score > threshold_f32,
+                    CompareOp::Gte => score >= threshold_f32,
+                    CompareOp::Lt => score < threshold_f32,
+                    CompareOp::Lte => score <= threshold_f32,
+                    CompareOp::Eq => (score - threshold_f32).abs() < 0.001,
+                    CompareOp::NotEq => (score - threshold_f32).abs() >= 0.001,
+                }
+            })
+            .take(limit)
+            .collect()
     }
 
     /// Fallback method for metadata-only queries without vector search.
