@@ -223,10 +223,6 @@ impl VectorStore {
     }
 
     /// Inserts a vector with the given ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if vector dimension doesn't match store dimension.
     #[wasm_bindgen]
     pub fn insert(&mut self, id: u64, vector: &[f32]) -> Result<(), JsValue> {
         if vector.len() != self.dimension {
@@ -248,10 +244,6 @@ impl VectorStore {
     }
 
     /// Inserts a vector with the given ID and optional JSON payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if vector dimension doesn't match store dimension.
     #[wasm_bindgen]
     pub fn insert_with_payload(
         &mut self,
@@ -287,11 +279,7 @@ impl VectorStore {
         Ok(())
     }
 
-    /// Gets a vector by ID.
-    ///
-    /// # Returns
-    ///
-    /// An object with `id`, `vector`, and `payload` fields, or null if not found.
+    /// Gets a vector by ID. Returns null if not found.
     #[wasm_bindgen]
     pub fn get(&self, id: u64) -> Result<JsValue, JsValue> {
         let idx = match self.ids.iter().position(|&x| x == id) {
@@ -305,12 +293,6 @@ impl VectorStore {
     }
 
     /// Searches with metadata filtering.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - Query vector
-    /// * `k` - Number of results
-    /// * `filter` - JSON filter object
     #[wasm_bindgen]
     pub fn search_with_filter(
         &self,
@@ -422,19 +404,6 @@ impl VectorStore {
     }
 
     /// Searches for the k nearest neighbors to the query vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - Query vector as `Float32Array`
-    /// * `k` - Number of results to return
-    ///
-    /// # Returns
-    ///
-    /// Array of [id, score] pairs sorted by relevance.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if query dimension doesn't match store dimension.
     #[wasm_bindgen]
     pub fn search(&self, query: &[f32], k: usize) -> Result<JsValue, JsValue> {
         if query.len() != self.dimension {
@@ -450,25 +419,7 @@ impl VectorStore {
         serde_wasm_bindgen::to_value(&results).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Similarity search with threshold filtering.
-    ///
-    /// Returns vectors where similarity to query meets the threshold condition.
-    /// This is the WASM equivalent of VelesQL's `WHERE similarity(field, vector) > threshold`.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - Query vector as `Float32Array`
-    /// * `threshold` - Similarity threshold value
-    /// * `operator` - Comparison operator: ">" (gt), ">=" (gte), "<" (lt), "<=" (lte), "=" (eq), "!=" (neq)
-    /// * `k` - Maximum number of results
-    ///
-    /// # Returns
-    ///
-    /// Array of `[id, score]` tuples where score meets the threshold condition.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if query dimension doesn't match or operator is invalid.
+    /// Similarity search with threshold filtering (VelesQL equivalent).
     #[wasm_bindgen]
     pub fn similarity_search(
         &self,
@@ -497,16 +448,6 @@ impl VectorStore {
     }
 
     /// Performs text search on payload fields.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - Text query to search for
-    /// * `k` - Number of results
-    /// * `field` - Optional field name to search in (default: searches all string fields)
-    ///
-    /// # Returns
-    ///
-    /// Array of results with matching payloads.
     #[wasm_bindgen]
     pub fn text_search(
         &self,
@@ -523,14 +464,7 @@ impl VectorStore {
         serde_wasm_bindgen::to_value(&output).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Performs hybrid search combining vector similarity and text search.
-    ///
-    /// # Arguments
-    ///
-    /// * `query_vector` - Query vector for similarity search
-    /// * `text_query` - Text query for payload search
-    /// * `k` - Number of results to return
-    /// * `vector_weight` - Weight for vector results (0.0-1.0, default 0.5)
+    /// Hybrid search combining vector similarity and text search.
     #[wasm_bindgen]
     pub fn hybrid_search(
         &self,
@@ -563,15 +497,7 @@ impl VectorStore {
         serde_wasm_bindgen::to_value(&output).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Performs multi-query search with result fusion.
-    ///
-    /// # Arguments
-    ///
-    /// * `vectors` - Array of query vectors (as flat array with dimension stride)
-    /// * `num_vectors` - Number of vectors in the array
-    /// * `k` - Number of results to return
-    /// * `strategy` - Fusion strategy: "average", "maximum", "rrf"
-    /// * `rrf_k` - RRF k parameter (default 60)
+    /// Multi-query search with result fusion (average/maximum/rrf).
     #[wasm_bindgen]
     pub fn multi_query_search(
         &mut self,
@@ -610,12 +536,6 @@ impl VectorStore {
     }
 
     /// Batch search for multiple vectors.
-    ///
-    /// # Arguments
-    ///
-    /// * `vectors` - Flat array of query vectors (concatenated)
-    /// * `num_vectors` - Number of vectors
-    /// * `k` - Results per query
     #[wasm_bindgen]
     pub fn batch_search(
         &self,
@@ -694,13 +614,7 @@ impl VectorStore {
         ))
     }
 
-    /// Pre-allocates memory for the specified number of additional vectors.
-    ///
-    /// Call this before bulk insertions to avoid repeated allocations.
-    ///
-    /// # Arguments
-    ///
-    /// * `additional` - Number of additional vectors to reserve space for
+    /// Pre-allocates memory for additional vectors.
     #[wasm_bindgen]
     pub fn reserve(&mut self, additional: usize) {
         self.ids.reserve(additional);
@@ -708,17 +622,6 @@ impl VectorStore {
     }
 
     /// Inserts multiple vectors in a single batch operation.
-    ///
-    /// This is significantly faster than calling `insert()` multiple times
-    /// because it pre-allocates memory and reduces per-call overhead.
-    ///
-    /// # Arguments
-    ///
-    /// * `batch` - JavaScript array of `[id, Float32Array]` pairs
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any vector dimension doesn't match store dimension.
     #[wasm_bindgen]
     pub fn insert_batch(&mut self, batch: JsValue) -> Result<(), JsValue> {
         let batch: Vec<(u64, Vec<f32>)> = serde_wasm_bindgen::from_value(batch)
@@ -771,25 +674,6 @@ impl VectorStore {
     }
 
     /// Saves the vector store to `IndexedDB`.
-    ///
-    /// This method persists all vectors to the browser's `IndexedDB`,
-    /// enabling offline-first applications.
-    ///
-    /// # Arguments
-    ///
-    /// * `db_name` - Name of the `IndexedDB` database
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `IndexedDB` is not available or the save fails.
-    ///
-    /// # Example
-    ///
-    /// ```javascript
-    /// const store = new VectorStore(768, "cosine");
-    /// store.insert(1n, vector1);
-    /// await store.save("my-vectors");
-    /// ```
     #[wasm_bindgen]
     pub async fn save(&self, db_name: &str) -> Result<(), JsValue> {
         let bytes = self.export_to_bytes()?;
@@ -797,23 +681,6 @@ impl VectorStore {
     }
 
     /// Loads a vector store from `IndexedDB`.
-    ///
-    /// This method restores all vectors from the browser's `IndexedDB`.
-    ///
-    /// # Arguments
-    ///
-    /// * `db_name` - Name of the `IndexedDB` database
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database doesn't exist or is corrupted.
-    ///
-    /// # Example
-    ///
-    /// ```javascript
-    /// const store = await VectorStore.load("my-vectors");
-    /// console.log(store.len); // Number of restored vectors
-    /// ```
     #[wasm_bindgen]
     pub async fn load(db_name: &str) -> Result<VectorStore, JsValue> {
         let bytes = persistence::load_from_indexeddb(db_name).await?;
@@ -821,16 +688,6 @@ impl VectorStore {
     }
 
     /// Deletes the `IndexedDB` database.
-    ///
-    /// Use this to clear all persisted data.
-    ///
-    /// # Arguments
-    ///
-    /// * `db_name` - Name of the `IndexedDB` database to delete
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the deletion fails.
     #[wasm_bindgen]
     pub async fn delete_database(db_name: &str) -> Result<(), JsValue> {
         persistence::delete_database(db_name).await
