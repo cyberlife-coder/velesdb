@@ -13,7 +13,14 @@ pub const DEFAULT_MAX_DEPTH: u32 = 3;
 
 /// Safety cap for maximum depth to prevent runaway traversals.
 /// Only applied when user requests unbounded traversal (*).
-pub const SAFETY_MAX_DEPTH: u32 = 10;
+/// 
+/// Note: Neo4j and ArangoDB do NOT impose hard limits.
+/// 100 is chosen to cover most real-world use cases:
+/// - Social networks (6 degrees of separation)
+/// - Dependency graphs (deep npm/cargo trees)
+/// - Organizational hierarchies
+/// - Knowledge graphs
+pub const SAFETY_MAX_DEPTH: u32 = 100;
 
 /// Result of a graph traversal operation.
 #[derive(Debug, Clone)]
@@ -474,6 +481,8 @@ mod tests {
     fn test_unbounded_range_applies_safety_cap() {
         let config = TraversalConfig::with_unbounded_range(1);
         assert_eq!(config.max_depth, SAFETY_MAX_DEPTH);
+        // SAFETY_MAX_DEPTH should be 100 (industry standard, no arbitrary low limit)
+        assert_eq!(SAFETY_MAX_DEPTH, 100);
     }
 
     #[test]
