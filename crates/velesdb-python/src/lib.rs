@@ -26,10 +26,12 @@
 
 mod collection;
 mod graph;
+mod graph_store;
 mod utils;
 
 pub use collection::Collection;
 pub use graph::{dict_to_edge, dict_to_node, edge_to_dict, node_to_dict, traversal_to_dict};
+pub use graph_store::GraphStore;
 
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -343,6 +345,7 @@ fn velesdb(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Collection>()?;
     m.add_class::<SearchResult>()?;
     m.add_class::<FusionStrategy>()?;
+    m.add_class::<GraphStore>()?;
 
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
