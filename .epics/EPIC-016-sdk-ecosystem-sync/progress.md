@@ -36,8 +36,8 @@
 |----|-------|--------|---------|---------|
 | US-040 | multi_query_search → TypeScript SDK | ✅ DONE | Cascade | - |
 | US-041 | Knowledge Graph → TypeScript SDK | ✅ DONE | Cascade | - |
-| US-042 | similarity() → LangChain | 🔴 TODO | - | - |
-| US-043 | similarity() → LlamaIndex | 🔴 TODO | - | - |
+| US-042 | similarity() → LangChain | ✅ DONE | Cascade | - |
+| US-043 | similarity() → LlamaIndex | ✅ DONE | Cascade | - |
 
 ## 🎯 Priorité Actuelle
 
