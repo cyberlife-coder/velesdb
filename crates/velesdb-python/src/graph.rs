@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 
 use crate::utils::{json_to_python, to_pyobject};
-use velesdb_core::collection::graph::{GraphEdge, GraphNode, TraversalResult};
+use velesdb_core::collection::graph::{GraphEdge, GraphNode};
 
 /// Convert a Python dict to a GraphNode.
 pub fn dict_to_node(py: Python<'_>, dict: &HashMap<String, PyObject>) -> PyResult<GraphNode> {
@@ -151,14 +151,6 @@ pub fn edge_to_dict(py: Python<'_>, edge: &GraphEdge) -> HashMap<String, PyObjec
     result
 }
 
-/// Convert a TraversalResult to a Python dict.
-pub fn traversal_to_dict(py: Python<'_>, result: &TraversalResult) -> HashMap<String, PyObject> {
-    let mut dict = HashMap::new();
-    dict.insert("target_id".to_string(), to_pyobject(py, result.target_id));
-    dict.insert("path".to_string(), to_pyobject(py, result.path.clone()));
-    dict.insert("depth".to_string(), to_pyobject(py, result.depth));
-    dict
-}
 
 use pyo3::types::PyDict;
 
