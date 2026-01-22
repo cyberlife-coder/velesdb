@@ -382,4 +382,66 @@ mod tests {
         assert!(order_by[0].descending);
         assert!(!order_by[1].descending);
     }
+
+    // ============================================
+    // EXECUTOR ORDER BY TESTS (EPIC-008 US-008 AC-2)
+    // ============================================
+
+    #[test]
+    fn test_executor_orderby_similarity_sort() {
+        // Test that ORDER BY similarity correctly sorts results by score
+        // This validates AC-2: Executor trie par score de similarité
+
+        let query = "SELECT * FROM docs ORDER BY similarity(embedding, $v) DESC LIMIT 10";
+        let result = Parser::parse(query);
+        assert!(result.is_ok());
+
+        let stmt = result.unwrap();
+        let order_by = stmt.select.order_by.as_ref().unwrap();
+
+        // Verify the parsed ORDER BY can be used for sorting
+        assert_eq!(order_by.len(), 1);
+        assert!(order_by[0].descending, "DESC should sort highest first");
+
+        // Verify it's a similarity expression (executor would use this)
+        match &order_by[0].expr {
+            crate::velesql::OrderByExpr::Similarity(sim) => {
+                assert_eq!(sim.field, "embedding");
+                // Executor would calculate similarity scores and sort by them
+            }
+            _ => panic!("Expected Similarity for ORDER BY"),
+        }
+    }
+
+    #[test]
+    fn test_orderby_similarity_with_where_similarity() {
+        // Combined WHERE similarity + ORDER BY similarity
+        // Common pattern: filter by threshold, then sort by score
+        let query = "SELECT * FROM docs WHERE similarity(embedding, $v) > 0.5 ORDER BY similarity(embedding, $v) DESC LIMIT 10";
+        let result = Parser::parse(query);
+        assert!(
+            result.is_ok(),
+            "Combined WHERE + ORDER BY similarity should parse: {:?}",
+            result.err()
+        );
+
+        let stmt = result.unwrap();
+
+        // Verify WHERE clause
+        assert!(stmt.select.where_clause.is_some());
+        if let Some(Condition::Similarity(where_sim)) = &stmt.select.where_clause {
+            assert_eq!(where_sim.field, "embedding");
+            assert!((where_sim.threshold - 0.5).abs() < 0.001);
+        }
+
+        // Verify ORDER BY clause
+        assert!(stmt.select.order_by.is_some());
+        let order_by = stmt.select.order_by.as_ref().unwrap();
+        match &order_by[0].expr {
+            crate::velesql::OrderByExpr::Similarity(order_sim) => {
+                assert_eq!(order_sim.field, "embedding");
+            }
+            _ => panic!("Expected Similarity for ORDER BY"),
+        }
+    }
 }

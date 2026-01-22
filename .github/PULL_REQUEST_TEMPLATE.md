@@ -38,6 +38,30 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published
 
+## Unsafe Code Checklist
+
+> **Complete this section if your PR adds or modifies `unsafe` code.**
+> Skip if no unsafe code is involved.
+
+- [ ] All `unsafe fn` have `# Safety` documentation
+- [ ] All `unsafe {}` blocks have `// SAFETY:` comments explaining why it's sound
+- [ ] Invariants documented in [docs/SOUNDNESS.md](../docs/SOUNDNESS.md)
+- [ ] No undefined behavior with valid inputs
+- [ ] Edge cases tested (null, overflow, alignment, empty)
+- [ ] Miri tests pass (if applicable): `cargo +nightly miri test <test_name>`
+
+### Unsafe Justification
+
+If adding new `unsafe`:
+- [ ] Safe alternative was considered and rejected (explain why below)
+- [ ] Performance benefit measured (if performance-motivated)
+
+**Why is `unsafe` necessary?**
+<!-- Explain why a safe alternative isn't feasible -->
+
+**What are the invariants?**
+<!-- List the conditions that must hold for this code to be sound -->
+
 ## Screenshots (if applicable)
 
 Add screenshots to help explain your changes.
