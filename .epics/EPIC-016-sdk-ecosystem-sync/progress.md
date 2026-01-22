@@ -25,9 +25,9 @@
 ### Graph/Streaming Propagation
 | US | Titre | Status | Assigné | Branche |
 |----|-------|--------|---------|---------|
-| US-030 | get_edges_by_label Python | 🔴 TODO | - | - |
-| US-031 | get_edges_by_label Server | 🔴 TODO | - | - |
-| US-032 | bfs_streaming Python | 🔴 TODO | - | - |
+| US-030 | get_edges_by_label Python | ✅ DONE | (pre-existing) | - |
+| US-031 | get_edges_by_label Server | ✅ DONE | (pre-existing) | - |
+| US-032 | bfs_streaming Python | ✅ DONE | (pre-existing) | - |
 | US-034 | Metrics Prometheus | 🔴 TODO | - | - |
 | US-035 | Prometheus feature flag | 🔴 TODO | - | - |
 
@@ -39,9 +39,16 @@
 | US-042 | similarity() → LangChain | ✅ DONE | Cascade | - |
 | US-043 | similarity() → LlamaIndex | ✅ DONE | Cascade | - |
 
+### Remaining Gaps (New)
+| US | Titre | Status | Assigné | Branche |
+|----|-------|--------|---------|---------|
+| US-044 | Knowledge Graph → LlamaIndex | 🔴 TODO | - | - |
+| US-045 | multi_query_search → LangChain | 🔴 TODO | - | - |
+| US-046 | multi_query_search → LlamaIndex | 🔴 TODO | - | - |
+
 ## 🎯 Priorité Actuelle
 
-**Sprint Focus**: US-040 → US-041 → US-042 → US-043
+**Sprint Focus**: US-044 → US-045 → US-046 (remaining gaps)
 
 Ces US sont bloquantes pour la release v1.3.0.
 
