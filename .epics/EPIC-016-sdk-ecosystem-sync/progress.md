@@ -42,9 +42,9 @@
 ### Remaining Gaps (New)
 | US | Titre | Status | Assigné | Branche |
 |----|-------|--------|---------|---------|
-| US-044 | Knowledge Graph → LlamaIndex | 🔴 TODO | - | - |
-| US-045 | multi_query_search → LangChain | 🔴 TODO | - | - |
-| US-046 | multi_query_search → LlamaIndex | 🔴 TODO | - | - |
+| US-044 | Knowledge Graph → LlamaIndex | ✅ DONE | Cascade | - |
+| US-045 | multi_query_search → LangChain | ✅ DONE | (pre-existing) | - |
+| US-046 | multi_query_search → LlamaIndex | ✅ DONE | (pre-existing) | - |
 
 ## 🎯 Priorité Actuelle
 
