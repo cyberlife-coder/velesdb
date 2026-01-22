@@ -4,28 +4,57 @@
 
 | Métrique | Valeur |
 |----------|--------|
-| Total US | 6 |
-| Complétées | 0 |
+| Total US | 14 |
+| Complétées | 3 |
 | En cours | 0 |
-| Bloquées | 0 |
-| Progression | 0% |
+| À faire | 11 |
+| Progression | 21% |
 
 ## 📦 Status des User Stories
 
+### Core Features Propagation
 | US | Titre | Status | Assigné | Branche |
 |----|-------|--------|---------|---------|
-| US-001 | Propager similarity() | 🟡 IN PROGRESS | Cascade | feature/EPIC-016-US-001-propagate-similarity |
-| US-002 | Propager Graph Property Index | 🔴 TODO | - | - |
+| US-001 | Propager similarity() (Python, TS REST) | ✅ DONE | Cascade | - |
+| US-002 | Propager Graph Property Index | ✅ DONE | Cascade | - |
 | US-003 | Propager Agent Memory patterns | 🔴 TODO | - | - |
-| US-004 | Matrice de compatibilité SDK | 🔴 TODO | - | - |
+| US-004 | Matrice de compatibilité SDK | ✅ DONE | Cascade | - |
 | US-005 | Tests cross-SDK automatisés | 🔴 TODO | - | - |
 | US-006 | Release sync workflow | 🔴 TODO | - | - |
 
+### Graph/Streaming Propagation
+| US | Titre | Status | Assigné | Branche |
+|----|-------|--------|---------|---------|
+| US-030 | get_edges_by_label Python | 🔴 TODO | - | - |
+| US-031 | get_edges_by_label Server | 🔴 TODO | - | - |
+| US-032 | bfs_streaming Python | 🔴 TODO | - | - |
+| US-034 | Metrics Prometheus | 🔴 TODO | - | - |
+| US-035 | Prometheus feature flag | 🔴 TODO | - | - |
+
+### Post-PR76 Ecosystem Sync (PRIORITY)
+| US | Titre | Status | Assigné | Branche |
+|----|-------|--------|---------|---------|
+| US-040 | multi_query_search → TypeScript SDK | ✅ DONE | Cascade | - |
+| US-041 | Knowledge Graph → TypeScript SDK | ✅ DONE | Cascade | - |
+| US-042 | similarity() → LangChain | 🔴 TODO | - | - |
+| US-043 | similarity() → LlamaIndex | 🔴 TODO | - | - |
+
+## 🎯 Priorité Actuelle
+
+**Sprint Focus**: US-040 → US-041 → US-042 → US-043
+
+Ces US sont bloquantes pour la release v1.3.0.
+
 ## 🔴 Bloqueurs
 
-- Dépend de EPIC-008, EPIC-009, EPIC-010 (features Core)
+- ~~Dépend de EPIC-008, EPIC-009, EPIC-010~~ ✅ Résolu
 
 ## 📝 Notes de Session
+
+### 2026-01-22
+- Ajout US-040 à US-043 pour parité post-PR76
+- Priorité: propagation multi_query_search et Knowledge Graph
+- Objectif: release v1.3.0 avec écosystème complet
 
 ### 2026-01-20
 - EPIC transversale créée pour garantir la parité écosystème
