@@ -1187,4 +1187,55 @@ mod tests {
             "col_a should remain unchanged when update fails - atomicity violated!"
         );
     }
+
+    /// Bug: batch_update silently ignores updates for non-existent columns
+    /// without recording them as failures.
+    #[test]
+    fn test_batch_update_reports_nonexistent_column_failures() {
+        // Arrange
+        let mut store = ColumnStore::with_primary_key(
+            &[("id", ColumnType::Int), ("value", ColumnType::Int)],
+            "id",
+        );
+
+        store
+            .insert_row(&[
+                ("id", ColumnValue::Int(1)),
+                ("value", ColumnValue::Int(100)),
+            ])
+            .unwrap();
+
+        // Act: batch update with a non-existent column
+        let updates = vec![
+            BatchUpdate {
+                pk: 1,
+                column: "value".to_string(),
+                value: ColumnValue::Int(200),
+            },
+            BatchUpdate {
+                pk: 1,
+                column: "nonexistent".to_string(), // This column doesn't exist
+                value: ColumnValue::Int(999),
+            },
+        ];
+
+        let result = store.batch_update(&updates);
+
+        // Assert: the nonexistent column update should be recorded as a failure
+        assert_eq!(
+            result.successful, 1,
+            "Only valid column update should succeed"
+        );
+        assert_eq!(
+            result.failed.len(),
+            1,
+            "Nonexistent column update should be recorded as failure"
+        );
+        // Total should equal input count
+        assert_eq!(
+            result.successful + result.failed.len(),
+            updates.len(),
+            "successful + failed should equal total updates"
+        );
+    }
 }

@@ -650,12 +650,37 @@ impl ColumnStore {
         }
 
         // Apply updates grouped by column
+        // We need pk info for failures, so build a reverse map
+        let mut row_to_pk: HashMap<usize, i64> = HashMap::new();
+        for update in updates {
+            if let Some(&row_idx) = self.primary_index.get(&update.pk) {
+                row_to_pk.insert(row_idx, update.pk);
+            }
+        }
+
         for (col_name, col_updates) in by_column {
             if let Some(col) = self.columns.get_mut(col_name) {
                 for (row_idx, value) in col_updates {
                     if Self::set_column_value(col, row_idx, value).is_ok() {
                         result.successful += 1;
+                    } else {
+                        let pk = row_to_pk.get(&row_idx).copied().unwrap_or(0);
+                        result.failed.push((
+                            pk,
+                            ColumnStoreError::TypeMismatch {
+                                expected: Self::column_type_name(col).clone(),
+                                actual: "unknown".to_string(),
+                            },
+                        ));
                     }
+                }
+            } else {
+                // Column doesn't exist - record all updates for this column as failures
+                for (row_idx, _) in col_updates {
+                    let pk = row_to_pk.get(&row_idx).copied().unwrap_or(0);
+                    result
+                        .failed
+                        .push((pk, ColumnStoreError::ColumnNotFound(col_name.to_string())));
                 }
             }
         }
