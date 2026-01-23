@@ -1511,4 +1511,32 @@ mod tests {
         assert!(string_bitmap.contains(0), "Row 0 matches name=alice");
         assert!(string_bitmap.contains(2), "Row 2 matches name=alice");
     }
+
+    /// Regression test: upsert must propagate type mismatch errors
+    /// PR Review Bug: upsert silently ignored set_column_value errors
+    #[test]
+    fn test_upsert_propagates_type_mismatch_errors() {
+        // Arrange: Create store with primary key
+        let mut store = ColumnStore::with_primary_key(
+            &[("id", ColumnType::Int), ("val", ColumnType::Int)],
+            "id",
+        );
+
+        store
+            .insert_row(&[("id", ColumnValue::Int(1)), ("val", ColumnValue::Int(100))])
+            .unwrap();
+
+        // Act: Try to upsert with wrong type for 'val' column (Float instead of Int)
+        let result = store.upsert(&[
+            ("id", ColumnValue::Int(1)),
+            ("val", ColumnValue::Float(99.9)), // Wrong type!
+        ]);
+
+        // Assert: Should fail with TypeMismatch error
+        assert!(
+            matches!(result, Err(ColumnStoreError::TypeMismatch { .. })),
+            "Upsert should return TypeMismatch error for wrong column type, got: {:?}",
+            result
+        );
+    }
 }

@@ -881,22 +881,22 @@ impl ColumnStore {
             if self.deleted_rows.contains(&row_idx) {
                 // Re-insert the row (undelete + update)
                 self.deleted_rows.remove(&row_idx);
-                // Update all provided columns
+                // Update all provided columns - propagate errors
                 for (col_name, value) in values {
                     if *col_name != pk_col.as_str() {
                         if let Some(col) = self.columns.get_mut(*col_name) {
-                            let _ = Self::set_column_value(col, row_idx, value.clone());
+                            Self::set_column_value(col, row_idx, value.clone())?;
                         }
                     }
                 }
                 return Ok(UpsertResult::Inserted);
             }
 
-            // Update existing row
+            // Update existing row - propagate errors
             for (col_name, value) in values {
                 if *col_name != pk_col.as_str() {
                     if let Some(col) = self.columns.get_mut(*col_name) {
-                        let _ = Self::set_column_value(col, row_idx, value.clone());
+                        Self::set_column_value(col, row_idx, value.clone())?;
                     }
                 }
             }
