@@ -451,4 +451,136 @@ mod tests {
         assert!(store.get_column("price").is_some());
         assert!(store.get_column("rating").is_some());
     }
+
+    // =========================================================================
+    // TDD Tests for EPIC-020 US-001: Primary Key Index
+    // =========================================================================
+
+    #[test]
+    fn test_columnstore_with_primary_key_creation() {
+        // Arrange & Act
+        let store = ColumnStore::with_primary_key(
+            &[("price_id", ColumnType::Int), ("value", ColumnType::Float)],
+            "price_id",
+        );
+
+        // Assert
+        assert_eq!(store.row_count(), 0);
+        assert!(store.primary_key_column().is_some());
+        assert_eq!(store.primary_key_column(), Some("price_id"));
+    }
+
+    #[test]
+    fn test_insert_updates_primary_index() {
+        // Arrange
+        let mut store = ColumnStore::with_primary_key(
+            &[("price_id", ColumnType::Int), ("value", ColumnType::Float)],
+            "price_id",
+        );
+
+        // Act
+        let result = store.insert_row(&[
+            ("price_id", ColumnValue::Int(12345)),
+            ("value", ColumnValue::Float(99.99)),
+        ]);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(store.row_count(), 1);
+        assert!(store.get_row_idx_by_pk(12345).is_some());
+    }
+
+    #[test]
+    fn test_get_row_by_pk_returns_correct_row() {
+        // Arrange
+        let mut store = ColumnStore::with_primary_key(
+            &[("price_id", ColumnType::Int), ("value", ColumnType::Float)],
+            "price_id",
+        );
+
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(100)),
+                ("value", ColumnValue::Float(10.0)),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(200)),
+                ("value", ColumnValue::Float(20.0)),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(300)),
+                ("value", ColumnValue::Float(30.0)),
+            ])
+            .unwrap();
+
+        // Act
+        let row_idx = store.get_row_idx_by_pk(200);
+
+        // Assert
+        assert_eq!(row_idx, Some(1)); // Second row inserted
+    }
+
+    #[test]
+    fn test_duplicate_pk_returns_error() {
+        // Arrange
+        let mut store = ColumnStore::with_primary_key(
+            &[("price_id", ColumnType::Int), ("value", ColumnType::Float)],
+            "price_id",
+        );
+
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(12345)),
+                ("value", ColumnValue::Float(99.99)),
+            ])
+            .unwrap();
+
+        // Act - Try to insert duplicate
+        let result = store.insert_row(&[
+            ("price_id", ColumnValue::Int(12345)), // Same PK!
+            ("value", ColumnValue::Float(88.88)),
+        ]);
+
+        // Assert
+        assert!(result.is_err());
+        match result {
+            Err(ColumnStoreError::DuplicateKey(pk)) => assert_eq!(pk, 12345),
+            _ => panic!("Expected DuplicateKey error"),
+        }
+        assert_eq!(store.row_count(), 1); // Only first row exists
+    }
+
+    #[test]
+    fn test_delete_updates_primary_index() {
+        // Arrange
+        let mut store = ColumnStore::with_primary_key(
+            &[("price_id", ColumnType::Int), ("value", ColumnType::Float)],
+            "price_id",
+        );
+
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(100)),
+                ("value", ColumnValue::Float(10.0)),
+            ])
+            .unwrap();
+        store
+            .insert_row(&[
+                ("price_id", ColumnValue::Int(200)),
+                ("value", ColumnValue::Float(20.0)),
+            ])
+            .unwrap();
+
+        // Act
+        let deleted = store.delete_by_pk(100);
+
+        // Assert
+        assert!(deleted);
+        assert!(store.get_row_idx_by_pk(100).is_none());
+        assert!(store.get_row_idx_by_pk(200).is_some());
+    }
 }

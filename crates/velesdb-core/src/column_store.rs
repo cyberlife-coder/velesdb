@@ -23,6 +23,21 @@
 use roaring::RoaringBitmap;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Errors that can occur in ColumnStore operations.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ColumnStoreError {
+    /// Duplicate primary key value.
+    #[error("Duplicate primary key: {0}")]
+    DuplicateKey(i64),
+    /// Missing primary key column in row.
+    #[error("Missing primary key column in row")]
+    MissingPrimaryKey,
+    /// Primary key column not found in schema.
+    #[error("Primary key column '{0}' not found in schema")]
+    PrimaryKeyColumnNotFound(String),
+}
 
 /// Interned string ID for fast equality comparisons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -159,6 +174,12 @@ pub struct ColumnStore {
     string_table: StringTable,
     /// Number of rows
     row_count: usize,
+    /// Primary key column name (if any)
+    primary_key_column: Option<String>,
+    /// Primary key index: pk_value → row_idx (O(1) lookup)
+    primary_index: HashMap<i64, usize>,
+    /// Deleted row indices (tombstones)
+    deleted_rows: rustc_hash::FxHashSet<usize>,
 }
 
 impl ColumnStore {
@@ -180,6 +201,26 @@ impl ColumnStore {
             store.add_column(name, *col_type);
         }
         store
+    }
+
+    /// Creates a column store with a primary key for O(1) lookups.
+    ///
+    /// # Arguments
+    ///
+    /// * `fields` - List of (`field_name`, `field_type`) tuples
+    /// * `pk_column` - Name of the primary key column (must be Int type)
+    #[must_use]
+    pub fn with_primary_key(fields: &[(&str, ColumnType)], pk_column: &str) -> Self {
+        let mut store = Self::with_schema(fields);
+        store.primary_key_column = Some(pk_column.to_string());
+        store.primary_index = HashMap::new();
+        store
+    }
+
+    /// Returns the primary key column name if set.
+    #[must_use]
+    pub fn primary_key_column(&self) -> Option<&str> {
+        self.primary_key_column.as_deref()
     }
 
     /// Adds a new column to the store.
@@ -258,6 +299,82 @@ impl ColumnStore {
         }
 
         self.row_count += 1;
+    }
+
+    /// Inserts a row with primary key validation and index update.
+    ///
+    /// Returns the row index on success, or an error if:
+    /// - Primary key is missing from the row
+    /// - Primary key value already exists (duplicate)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ColumnStoreError::MissingPrimaryKey` if the primary key column is not in the row.
+    /// Returns `ColumnStoreError::DuplicateKey` if the primary key value already exists.
+    pub fn insert_row(
+        &mut self,
+        values: &[(&str, ColumnValue)],
+    ) -> Result<usize, ColumnStoreError> {
+        // If no primary key configured, just push the row
+        let Some(ref pk_col) = self.primary_key_column else {
+            self.push_row(values);
+            return Ok(self.row_count - 1);
+        };
+
+        // Find the primary key value in the provided values
+        let pk_value = values
+            .iter()
+            .find(|(name, _)| *name == pk_col.as_str())
+            .and_then(|(_, value)| {
+                if let ColumnValue::Int(v) = value {
+                    Some(*v)
+                } else {
+                    None
+                }
+            })
+            .ok_or(ColumnStoreError::MissingPrimaryKey)?;
+
+        // Check for duplicate
+        if self.primary_index.contains_key(&pk_value) {
+            return Err(ColumnStoreError::DuplicateKey(pk_value));
+        }
+
+        // Insert the row
+        let row_idx = self.row_count;
+        self.push_row(values);
+
+        // Update the primary index
+        self.primary_index.insert(pk_value, row_idx);
+
+        Ok(row_idx)
+    }
+
+    /// Gets the row index by primary key value - O(1) lookup.
+    ///
+    /// Returns `None` if:
+    /// - No primary key is configured
+    /// - The primary key value is not found
+    /// - The row has been deleted
+    #[must_use]
+    pub fn get_row_idx_by_pk(&self, pk: i64) -> Option<usize> {
+        let row_idx = self.primary_index.get(&pk).copied()?;
+        // Check if row is deleted (tombstone)
+        if self.deleted_rows.contains(&row_idx) {
+            return None;
+        }
+        Some(row_idx)
+    }
+
+    /// Deletes a row by primary key value.
+    ///
+    /// This uses tombstone deletion - the row data remains but is marked as deleted.
+    /// Returns `true` if the row was found and deleted, `false` if not found.
+    pub fn delete_by_pk(&mut self, pk: i64) -> bool {
+        let Some(row_idx) = self.primary_index.remove(&pk) else {
+            return false;
+        };
+        self.deleted_rows.insert(row_idx);
+        true
     }
 
     /// Gets a column by name.
