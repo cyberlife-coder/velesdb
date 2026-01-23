@@ -20,6 +20,8 @@ import type {
   TraverseRequest,
   TraverseResponse,
   DegreeResponse,
+  QueryOptions,
+  QueryResponse,
 } from '../types';
 import { ConnectionError, NotFoundError, VelesDBError } from '../types';
 
@@ -439,25 +441,51 @@ export class RestBackend implements IVelesDBBackend {
   }
 
   async query(
+    collection: string,
     queryString: string,
-    params?: Record<string, unknown>
-  ): Promise<SearchResult[]> {
+    params?: Record<string, unknown>,
+    options?: QueryOptions
+  ): Promise<QueryResponse> {
     this.ensureInitialized();
 
-    const response = await this.request<{ results: SearchResult[] }>(
+    const response = await this.request<QueryResponse>(
       'POST',
-      '/query',
+      `/collections/${encodeURIComponent(collection)}/query`,
       {
         query: queryString,
         params: params ?? {},
+        options: {
+          timeout_ms: options?.timeoutMs ?? 30000,
+          stream: options?.stream ?? false,
+        },
       }
     );
 
     if (response.error) {
+      if (response.error.code === 'NOT_FOUND') {
+        throw new NotFoundError(`Collection '${collection}'`);
+      }
       throw new VelesDBError(response.error.message, response.error.code);
     }
 
-    return response.data?.results ?? [];
+    // Map snake_case API response to camelCase TypeScript types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawData = response.data as any;
+    return {
+      results: (rawData?.results ?? []).map((r: Record<string, unknown>) => ({
+        nodeId: (r.node_id ?? r.nodeId) as number,
+        vectorScore: (r.vector_score ?? r.vectorScore) as number | null,
+        graphScore: (r.graph_score ?? r.graphScore) as number | null,
+        fusedScore: (r.fused_score ?? r.fusedScore) as number,
+        bindings: (r.bindings as Record<string, unknown>) ?? {},
+        columnData: (r.column_data ?? r.columnData) as Record<string, unknown> | null,
+      })),
+      stats: {
+        executionTimeMs: rawData?.stats?.execution_time_ms ?? rawData?.stats?.executionTimeMs ?? 0,
+        strategy: rawData?.stats?.strategy ?? 'unknown',
+        scannedNodes: rawData?.stats?.scanned_nodes ?? rawData?.stats?.scannedNodes ?? 0,
+      },
+    };
   }
 
   async multiQuerySearch(
