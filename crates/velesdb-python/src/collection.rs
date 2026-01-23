@@ -525,7 +525,25 @@ impl Collection {
         })
     }
 
-    /// Execute a VelesQL query.
+    /// Execute a VelesQL multi-model query (EPIC-031 US-008).
+    ///
+    /// Supports hybrid vector + graph queries with VelesQL syntax.
+    ///
+    /// Args:
+    ///     query_str: VelesQL query string
+    ///     params: Query parameters (vectors as lists/numpy arrays, scalars)
+    ///
+    /// Returns:
+    ///     List of query results with node_id, vector_score, graph_score,
+    ///     fused_score, bindings (payload), and column_data
+    ///
+    /// Example:
+    ///     >>> results = collection.query(
+    ///     ...     "SELECT * FROM docs WHERE vector NEAR $q LIMIT 20",
+    ///     ...     params={"q": query_embedding}
+    ///     ... )
+    ///     >>> for r in results:
+    ///     ...     print(f"Node: {r['node_id']}, Score: {r['fused_score']:.3f}")
     #[pyo3(signature = (query_str, params=None))]
     fn query(
         &self,
@@ -548,19 +566,32 @@ impl Collection {
                 .execute_query(&parsed, &rust_params)
                 .map_err(|e| PyRuntimeError::new_err(format!("Query failed: {e}")))?;
 
+            // Return multi-model result format (EPIC-031)
             let py_results: Vec<HashMap<String, PyObject>> = results
                 .into_iter()
                 .map(|r| {
                     let mut result = HashMap::new();
-                    result.insert("id".to_string(), to_pyobject(py, r.point.id));
-                    result.insert("score".to_string(), to_pyobject(py, r.score));
-
+                    // Multi-model fields
+                    result.insert("node_id".to_string(), to_pyobject(py, r.point.id));
+                    result.insert("vector_score".to_string(), to_pyobject(py, r.score));
+                    result.insert("graph_score".to_string(), py.None());
+                    result.insert("fused_score".to_string(), to_pyobject(py, r.score));
+                    // Payload as bindings
                     let payload_py = match &r.point.payload {
                         Some(p) => json_to_python(py, p),
                         None => py.None(),
                     };
-                    result.insert("payload".to_string(), payload_py);
-
+                    result.insert("bindings".to_string(), payload_py);
+                    result.insert("column_data".to_string(), py.None());
+                    // Legacy fields for compatibility
+                    result.insert("id".to_string(), to_pyobject(py, r.point.id));
+                    result.insert("score".to_string(), to_pyobject(py, r.score));
+                    result.insert("payload".to_string(), {
+                        match &r.point.payload {
+                            Some(p) => json_to_python(py, p),
+                            None => py.None(),
+                        }
+                    });
                     result
                 })
                 .collect();
