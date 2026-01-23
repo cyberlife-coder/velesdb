@@ -233,8 +233,30 @@ impl ColumnStore {
     ///
     /// * `fields` - List of (`field_name`, `field_type`) tuples
     /// * `pk_column` - Name of the primary key column (must be Int type)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `pk_column` is not found in `fields` or is not of type `Int`.
     #[must_use]
     pub fn with_primary_key(fields: &[(&str, ColumnType)], pk_column: &str) -> Self {
+        // Validate pk_column exists and is Int type
+        let pk_field = fields
+            .iter()
+            .find(|(name, _)| *name == pk_column)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Primary key column '{}' not found in fields: {:?}",
+                    pk_column,
+                    fields.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+                )
+            });
+        assert!(
+            matches!(pk_field.1, ColumnType::Int),
+            "Primary key column '{}' must be Int type, got {:?}",
+            pk_column,
+            pk_field.1
+        );
+
         let mut store = Self::with_schema(fields);
         store.primary_key_column = Some(pk_column.to_string());
         store.primary_index = HashMap::new();
@@ -258,10 +280,26 @@ impl ColumnStore {
         self.columns.insert(name.to_string(), column);
     }
 
-    /// Returns the number of rows in the store.
+    /// Returns the total number of rows in the store (including deleted/tombstoned rows).
+    ///
+    /// For the count of active (non-deleted) rows, use [`active_row_count()`](Self::active_row_count).
     #[must_use]
     pub fn row_count(&self) -> usize {
         self.row_count
+    }
+
+    /// Returns the number of active (non-deleted) rows in the store.
+    ///
+    /// This excludes rows that have been deleted via `delete_by_pk()` or expired via `expire_rows()`.
+    #[must_use]
+    pub fn active_row_count(&self) -> usize {
+        self.row_count.saturating_sub(self.deleted_rows.len())
+    }
+
+    /// Returns the number of deleted (tombstoned) rows.
+    #[must_use]
+    pub fn deleted_row_count(&self) -> usize {
+        self.deleted_rows.len()
     }
 
     /// Returns the string table for string interning.
@@ -660,6 +698,12 @@ impl ColumnStore {
     /// Updates are grouped by column for better cache performance.
     /// Partial failures are allowed - successful updates are not rolled back.
     ///
+    /// # Note on Update Order
+    ///
+    /// Updates are reordered by column for cache efficiency. If multiple updates
+    /// target the same row and column, the order is **not guaranteed**. For
+    /// order-dependent updates to the same cell, use individual `update_by_pk` calls.
+    ///
     /// # Arguments
     ///
     /// * `updates` - List of batch update operations
@@ -771,11 +815,17 @@ impl ColumnStore {
     /// Sets a TTL (Time To Live) on a row.
     ///
     /// The row will be marked for expiration after the specified duration.
+    /// Expiration is checked when `expire_rows()` is called.
     ///
     /// # Arguments
     ///
     /// * `pk` - Primary key of the row
-    /// * `ttl_seconds` - Time to live in seconds from now
+    /// * `ttl_seconds` - Time to live in seconds from now (use 0 for immediate expiry)
+    ///
+    /// # Note on Testing
+    ///
+    /// TTL uses `SystemTime::now()` internally. For reliable tests, use `ttl_seconds = 0`
+    /// for immediate expiry rather than relying on timing.
     ///
     /// # Errors
     ///

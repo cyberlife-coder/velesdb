@@ -1605,4 +1605,55 @@ mod tests {
             "Row should remain deleted after failed upsert"
         );
     }
+
+    /// Test: with_primary_key validates pk_column exists
+    #[test]
+    #[should_panic(expected = "not found in fields")]
+    fn test_with_primary_key_validates_column_exists() {
+        // Should panic - pk column doesn't exist
+        let _ = ColumnStore::with_primary_key(&[("id", ColumnType::Int)], "nonexistent");
+    }
+
+    /// Test: with_primary_key validates pk_column is Int type
+    #[test]
+    #[should_panic(expected = "must be Int type")]
+    fn test_with_primary_key_validates_column_type() {
+        // Should panic - pk column is not Int
+        let _ = ColumnStore::with_primary_key(&[("id", ColumnType::String)], "id");
+    }
+
+    /// Test: active_row_count excludes deleted rows
+    #[test]
+    fn test_active_row_count_excludes_deleted() {
+        let mut store = ColumnStore::with_primary_key(
+            &[("id", ColumnType::Int), ("val", ColumnType::Int)],
+            "id",
+        );
+
+        // Insert 3 rows
+        store
+            .insert_row(&[("id", ColumnValue::Int(1)), ("val", ColumnValue::Int(10))])
+            .unwrap();
+        store
+            .insert_row(&[("id", ColumnValue::Int(2)), ("val", ColumnValue::Int(20))])
+            .unwrap();
+        store
+            .insert_row(&[("id", ColumnValue::Int(3)), ("val", ColumnValue::Int(30))])
+            .unwrap();
+
+        assert_eq!(store.row_count(), 3);
+        assert_eq!(store.active_row_count(), 3);
+        assert_eq!(store.deleted_row_count(), 0);
+
+        // Delete one row
+        store.delete_by_pk(2);
+
+        assert_eq!(store.row_count(), 3, "row_count includes deleted");
+        assert_eq!(
+            store.active_row_count(),
+            2,
+            "active_row_count excludes deleted"
+        );
+        assert_eq!(store.deleted_row_count(), 1);
+    }
 }
