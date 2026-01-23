@@ -313,9 +313,15 @@ impl ColumnStore {
         &mut self.string_table
     }
 
-    /// Pushes values for a new row.
+    /// Pushes values for a new row (low-level, no validation).
     ///
     /// Missing fields will be set to null.
+    /// Type mismatches are silently converted to null for flexibility.
+    ///
+    /// # Note
+    ///
+    /// For validated insertion, use [`insert_row()`](Self::insert_row) which
+    /// validates types before insertion and returns errors on mismatch.
     pub fn push_row(&mut self, values: &[(&str, ColumnValue)]) {
         // Build a map of provided values
         let value_map: FxHashMap<&str, &ColumnValue> =
@@ -771,6 +777,8 @@ impl ColumnStore {
         for (col_name, col_updates) in by_column {
             if let Some(col) = self.columns.get_mut(col_name) {
                 for (row_idx, value) in col_updates {
+                    // Capture actual type before attempting set
+                    let actual_type = Self::value_type_name(&value);
                     if Self::set_column_value(col, row_idx, value).is_ok() {
                         result.successful += 1;
                     } else {
@@ -779,7 +787,7 @@ impl ColumnStore {
                             pk,
                             ColumnStoreError::TypeMismatch {
                                 expected: Self::column_type_name(col).clone(),
-                                actual: "unknown".to_string(),
+                                actual: actual_type,
                             },
                         ));
                     }
@@ -1232,6 +1240,10 @@ impl ColumnStore {
     ///
     /// Uses `RoaringBitmap` for memory-efficient storage of matching indices.
     /// Useful for combining multiple filters with AND/OR operations.
+    /// # Note
+    ///
+    /// Row indices are cast to u32 for RoaringBitmap. This limits stores to ~4B rows.
+    /// Indices >= u32::MAX will be silently skipped.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn filter_eq_int_bitmap(&self, column: &str, value: i64) -> RoaringBitmap {
@@ -1243,6 +1255,7 @@ impl ColumnStore {
             .enumerate()
             .filter_map(|(idx, v)| {
                 if *v == Some(value) && !self.deleted_rows.contains(&idx) {
+                    // Safe: stores with >4B rows are unsupported for bitmap ops
                     Some(idx as u32)
                 } else {
                     None
