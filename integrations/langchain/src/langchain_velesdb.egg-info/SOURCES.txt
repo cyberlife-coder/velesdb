@@ -2,6 +2,7 @@ LICENSE
 README.md
 pyproject.toml
 src/langchain_velesdb/__init__.py
+src/langchain_velesdb/graph_retriever.py
 src/langchain_velesdb/vectorstore.py
 src/langchain_velesdb.egg-info/PKG-INFO
 src/langchain_velesdb.egg-info/SOURCES.txt
