@@ -22,6 +22,13 @@ Example:
 
 from langchain_velesdb.vectorstore import VelesDBVectorStore
 from langchain_velesdb.graph_retriever import GraphRetriever, GraphQARetriever
+from langchain_velesdb.memory import VelesDBChatMemory, VelesDBSemanticMemory
 
-__all__ = ["VelesDBVectorStore", "GraphRetriever", "GraphQARetriever"]
+__all__ = [
+    "VelesDBVectorStore",
+    "GraphRetriever",
+    "GraphQARetriever",
+    "VelesDBChatMemory",
+    "VelesDBSemanticMemory",
+]
 __version__ = "0.8.10"
