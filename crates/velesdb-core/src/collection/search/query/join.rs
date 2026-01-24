@@ -56,6 +56,9 @@ pub fn adaptive_batch_size(key_count: usize) -> usize {
 ///
 /// The join key is extracted from the search result's payload using
 /// the right side of the join condition (e.g., `products.id`).
+///
+/// # Note
+/// Point IDs > i64::MAX are filtered out to prevent overflow issues.
 pub fn extract_join_keys(results: &[SearchResult], condition: &JoinCondition) -> Vec<(usize, i64)> {
     let key_column = &condition.right.column;
 
@@ -72,8 +75,9 @@ pub fn extract_join_keys(results: &[SearchResult], condition: &JoinCondition) ->
                         // Support both integer and point ID
                         v.as_i64().or_else(|| {
                             // Fallback: use point.id if key_column is "id"
+                            // Use try_from to safely convert u64 -> i64 without overflow
                             if key_column == "id" {
-                                Some(r.point.id as i64)
+                                i64::try_from(r.point.id).ok()
                             } else {
                                 None
                             }
@@ -82,8 +86,9 @@ pub fn extract_join_keys(results: &[SearchResult], condition: &JoinCondition) ->
                 })
                 .or_else(|| {
                     // If no payload, use point.id for "id" column
+                    // Use try_from to safely convert u64 -> i64 without overflow
                     if key_column == "id" {
-                        Some(r.point.id as i64)
+                        i64::try_from(r.point.id).ok()
                     } else {
                         None
                     }
@@ -97,10 +102,11 @@ pub fn extract_join_keys(results: &[SearchResult], condition: &JoinCondition) ->
 ///
 /// # Algorithm
 ///
-/// 1. Extract join keys from search results
-/// 2. Determine adaptive batch size
-/// 3. Batch lookup in ColumnStore by primary key
-/// 4. Merge matching rows with search results
+/// 1. Validate that join condition's left column matches ColumnStore's primary key
+/// 2. Extract join keys from search results
+/// 3. Determine adaptive batch size
+/// 4. Batch lookup in ColumnStore by primary key
+/// 5. Merge matching rows with search results
 ///
 /// # Arguments
 ///
@@ -111,22 +117,37 @@ pub fn extract_join_keys(results: &[SearchResult], condition: &JoinCondition) ->
 /// # Returns
 ///
 /// Vector of JoinedResults containing merged data.
+/// Returns empty vector if the join condition's left column doesn't match the primary key.
 pub fn execute_join(
     results: &[SearchResult],
     join: &JoinClause,
     column_store: &ColumnStore,
 ) -> Vec<JoinedResult> {
-    // 1. Extract join keys from search results
+    // 1. Validate that join column matches ColumnStore's primary key
+    // This prevents silent incorrect results when joining on non-PK columns
+    let join_column = &join.condition.left.column;
+    if let Some(pk_column) = column_store.primary_key_column() {
+        if join_column != pk_column {
+            // Cannot join on non-primary-key column - return empty results
+            // In the future, this could use secondary indexes
+            return Vec::new();
+        }
+    } else {
+        // ColumnStore has no primary key configured - cannot perform PK-based join
+        return Vec::new();
+    }
+
+    // 2. Extract join keys from search results
     let join_keys = extract_join_keys(results, &join.condition);
 
     if join_keys.is_empty() {
         return Vec::new();
     }
 
-    // 2. Determine adaptive batch size
+    // 3. Determine adaptive batch size
     let batch_size = adaptive_batch_size(join_keys.len());
 
-    // 3. Build result map: pk -> (result_idx, row_data)
+    // 4. Build result map: pk -> (result_idx, row_data)
     let mut joined_results = Vec::with_capacity(join_keys.len());
 
     // Process in batches
@@ -372,5 +393,173 @@ mod tests {
         let payload = search_results[0].point.payload.as_ref().unwrap();
         assert!(payload.get("price").is_some());
         assert!(payload.get("available").is_some());
+    }
+
+    // ========== REGRESSION TESTS FOR PR #85 BUGS ==========
+
+    /// Regression test for BUG-1: u64 to i64 overflow
+    /// Point IDs > i64::MAX should not cause incorrect join keys
+    #[test]
+    fn test_extract_join_keys_u64_overflow_safety() {
+        // Create a search result with a very large u64 ID (> i64::MAX)
+        let large_id = u64::MAX;
+        let result = SearchResult {
+            point: Point {
+                id: large_id,
+                vector: vec![0.1, 0.2, 0.3],
+                payload: None, // No payload, will try to use point.id
+            },
+            score: 0.9,
+        };
+
+        let condition = JoinCondition {
+            left: ColumnRef {
+                table: Some("prices".to_string()),
+                column: "product_id".to_string(),
+            },
+            right: ColumnRef {
+                table: Some("products".to_string()),
+                column: "id".to_string(),
+            },
+        };
+
+        let keys = extract_join_keys(&[result], &condition);
+
+        // Should return empty or valid positive key, not a negative overflow value
+        // Before fix: would return (0, -1) due to overflow
+        // After fix: should return empty (None) since u64::MAX doesn't fit in i64
+        assert!(
+            keys.is_empty() || keys.iter().all(|(_, k)| *k >= 0),
+            "Large u64 IDs should not produce negative join keys: {:?}",
+            keys
+        );
+    }
+
+    /// Regression test for BUG-1: Boundary case at i64::MAX
+    #[test]
+    fn test_extract_join_keys_i64_max_boundary() {
+        // i64::MAX should work fine
+        let max_safe_id = i64::MAX as u64;
+        let result = SearchResult {
+            point: Point {
+                id: max_safe_id,
+                vector: vec![0.1, 0.2, 0.3],
+                payload: None,
+            },
+            score: 0.9,
+        };
+
+        let condition = JoinCondition {
+            left: ColumnRef {
+                table: Some("prices".to_string()),
+                column: "product_id".to_string(),
+            },
+            right: ColumnRef {
+                table: Some("products".to_string()),
+                column: "id".to_string(),
+            },
+        };
+
+        let keys = extract_join_keys(&[result], &condition);
+
+        // i64::MAX as u64 should safely convert back to i64::MAX
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].1, i64::MAX);
+    }
+
+    /// Regression test for BUG-1: Value just above i64::MAX
+    #[test]
+    fn test_extract_join_keys_just_above_i64_max() {
+        // i64::MAX + 1 should not produce incorrect results
+        let just_over = (i64::MAX as u64) + 1;
+        let result = SearchResult {
+            point: Point {
+                id: just_over,
+                vector: vec![0.1, 0.2, 0.3],
+                payload: None,
+            },
+            score: 0.9,
+        };
+
+        let condition = JoinCondition {
+            left: ColumnRef {
+                table: Some("prices".to_string()),
+                column: "product_id".to_string(),
+            },
+            right: ColumnRef {
+                table: Some("products".to_string()),
+                column: "id".to_string(),
+            },
+        };
+
+        let keys = extract_join_keys(&[result], &condition);
+
+        // Should be empty (filtered out) rather than overflow to negative
+        assert!(
+            keys.is_empty(),
+            "IDs > i64::MAX should be filtered out, got: {:?}",
+            keys
+        );
+    }
+
+    /// Regression test for BUG-2: JOIN must validate PK column
+    #[test]
+    fn test_execute_join_validates_pk_column() {
+        let results = vec![make_search_result(1, 1)];
+        let column_store = make_column_store(); // PK is "product_id"
+
+        // Create join with WRONG left column (category_id instead of product_id)
+        let wrong_join = JoinClause {
+            table: "prices".to_string(),
+            alias: None,
+            condition: JoinCondition {
+                left: ColumnRef {
+                    table: Some("prices".to_string()),
+                    column: "category_id".to_string(), // NOT the PK!
+                },
+                right: ColumnRef {
+                    table: Some("products".to_string()),
+                    column: "id".to_string(),
+                },
+            },
+        };
+
+        let joined = execute_join(&results, &wrong_join, &column_store);
+
+        // Before fix: would silently use product_id as PK anyway
+        // After fix: should return empty (PK mismatch) or error
+        // For now, we expect empty results since we can't join on non-PK
+        assert!(
+            joined.is_empty(),
+            "JOIN on non-PK column should not return results silently"
+        );
+    }
+
+    /// Regression test for BUG-2: JOIN with correct PK column should work
+    #[test]
+    fn test_execute_join_correct_pk_column_works() {
+        let results = vec![make_search_result(1, 1)];
+        let column_store = make_column_store(); // PK is "product_id"
+
+        // Correct join with actual PK column
+        let correct_join = JoinClause {
+            table: "prices".to_string(),
+            alias: None,
+            condition: JoinCondition {
+                left: ColumnRef {
+                    table: Some("prices".to_string()),
+                    column: "product_id".to_string(), // Correct PK
+                },
+                right: ColumnRef {
+                    table: Some("products".to_string()),
+                    column: "id".to_string(),
+                },
+            },
+        };
+
+        let joined = execute_join(&results, &correct_join, &column_store);
+
+        // Should work correctly
+        assert_eq!(joined.len(), 1);
     }
 }
