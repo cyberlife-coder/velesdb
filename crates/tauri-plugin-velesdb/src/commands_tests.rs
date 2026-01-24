@@ -3,8 +3,9 @@
 use crate::helpers::{metric_to_string, parse_metric, parse_storage_mode, storage_mode_to_string};
 use crate::types::{
     default_metric, default_top_k, default_vector_weight, BatchSearchRequest, CollectionInfo,
-    CreateCollectionRequest, DeletePointsRequest, GetPointsRequest, HybridSearchRequest,
-    PointOutput, SearchRequest, SearchResponse, SearchResult, TextSearchRequest,
+    CreateCollectionRequest, DeletePointsRequest, GetPointsRequest, HybridResult,
+    HybridSearchRequest, PointOutput, QueryRequest, QueryResponse, SearchRequest, SearchResponse,
+    SearchResult, TextSearchRequest,
 };
 
 #[test]
@@ -259,8 +260,6 @@ fn test_search_response_serialize() {
 // ============================================================================
 // VelesQL Query Tests (EPIC-031 US-012)
 // ============================================================================
-
-use crate::types::{HybridResult, QueryRequest, QueryResponse};
 
 #[test]
 fn test_query_request_deserialize_simple() {
