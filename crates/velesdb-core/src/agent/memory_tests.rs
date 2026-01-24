@@ -104,6 +104,29 @@ fn test_semantic_dimension_mismatch() {
     assert!(result.is_err());
 }
 
+/// Test: AgentMemory rejects mismatched dimension when collection exists (PR #93 bug fix)
+#[test]
+fn test_dimension_mismatch_on_existing_collection() {
+    let dir = tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+
+    // Create memory with dimension 4
+    let memory1 = AgentMemory::with_dimension(&db, 4).unwrap();
+    assert_eq!(memory1.semantic().dimension(), 4);
+
+    // Store something to ensure collection is created
+    let embedding = vec![1.0, 0.0, 0.0, 0.0];
+    memory1.semantic().store(1, "test", &embedding).unwrap();
+
+    // Try to create memory with different dimension - should fail
+    let result = AgentMemory::with_dimension(&db, 8);
+    assert!(result.is_err());
+
+    // Creating with same dimension should succeed
+    let memory2 = AgentMemory::with_dimension(&db, 4);
+    assert!(memory2.is_ok());
+}
+
 // ============================================================================
 // US-003: EpisodicMemory tests
 // ============================================================================

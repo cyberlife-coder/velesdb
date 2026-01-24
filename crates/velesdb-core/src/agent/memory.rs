@@ -131,15 +131,25 @@ impl<'a> SemanticMemory<'a> {
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
 
-        // Create collection if it doesn't exist
-        if db.get_collection(&collection_name).is_none() {
+        // Create collection if it doesn't exist, or validate dimension matches
+        let actual_dimension = if let Some(collection) = db.get_collection(&collection_name) {
+            let existing_dim = collection.config().dimension;
+            if existing_dim != dimension {
+                return Err(AgentMemoryError::DimensionMismatch {
+                    expected: existing_dim,
+                    actual: dimension,
+                });
+            }
+            existing_dim
+        } else {
             db.create_collection(&collection_name, dimension, DistanceMetric::Cosine)?;
-        }
+            dimension
+        };
 
         Ok(Self {
             collection_name,
             db,
-            dimension,
+            dimension: actual_dimension,
         })
     }
 
@@ -251,15 +261,25 @@ impl<'a> EpisodicMemory<'a> {
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
 
-        // Create collection if it doesn't exist
-        if db.get_collection(&collection_name).is_none() {
+        // Create collection if it doesn't exist, or validate dimension matches
+        let actual_dimension = if let Some(collection) = db.get_collection(&collection_name) {
+            let existing_dim = collection.config().dimension;
+            if existing_dim != dimension {
+                return Err(AgentMemoryError::DimensionMismatch {
+                    expected: existing_dim,
+                    actual: dimension,
+                });
+            }
+            existing_dim
+        } else {
             db.create_collection(&collection_name, dimension, DistanceMetric::Cosine)?;
-        }
+            dimension
+        };
 
         Ok(Self {
             collection_name,
             db,
-            dimension,
+            dimension: actual_dimension,
         })
     }
 
@@ -432,15 +452,25 @@ impl<'a> ProceduralMemory<'a> {
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
 
-        // Create collection if it doesn't exist
-        if db.get_collection(&collection_name).is_none() {
+        // Create collection if it doesn't exist, or validate dimension matches
+        let actual_dimension = if let Some(collection) = db.get_collection(&collection_name) {
+            let existing_dim = collection.config().dimension;
+            if existing_dim != dimension {
+                return Err(AgentMemoryError::DimensionMismatch {
+                    expected: existing_dim,
+                    actual: dimension,
+                });
+            }
+            existing_dim
+        } else {
             db.create_collection(&collection_name, dimension, DistanceMetric::Cosine)?;
-        }
+            dimension
+        };
 
         Ok(Self {
             collection_name,
             db,
-            dimension,
+            dimension: actual_dimension,
         })
     }
 
