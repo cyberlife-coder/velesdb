@@ -128,6 +128,13 @@ pub struct SemanticMemory<'a> {
 impl<'a> SemanticMemory<'a> {
     const COLLECTION_NAME: &'static str = "_semantic_memory";
 
+    /// Creates a new SemanticMemory from a Database reference.
+    ///
+    /// This is the public constructor for use in Python bindings.
+    pub fn new_from_db(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
+        Self::new(db, dimension)
+    }
+
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
 
@@ -247,6 +254,13 @@ pub struct EpisodicMemory<'a> {
 
 impl<'a> EpisodicMemory<'a> {
     const COLLECTION_NAME: &'static str = "_episodic_memory";
+
+    /// Creates a new EpisodicMemory from a Database reference.
+    ///
+    /// This is the public constructor for use in Python bindings.
+    pub fn new_from_db(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
+        Self::new(db, dimension)
+    }
 
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
@@ -428,6 +442,13 @@ pub struct ProceduralMemory<'a> {
 
 impl<'a> ProceduralMemory<'a> {
     const COLLECTION_NAME: &'static str = "_procedural_memory";
+
+    /// Creates a new ProceduralMemory from a Database reference.
+    ///
+    /// This is the public constructor for use in Python bindings.
+    pub fn new_from_db(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
+        Self::new(db, dimension)
+    }
 
     fn new(db: &'a Database, dimension: usize) -> Result<Self, AgentMemoryError> {
         let collection_name = Self::COLLECTION_NAME.to_string();
