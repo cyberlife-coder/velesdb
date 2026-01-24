@@ -146,7 +146,10 @@ pub use quantization::{
     BinaryQuantizedVector, QuantizedVector, StorageMode,
 };
 
-pub use column_store::{ColumnStore, ColumnType, ColumnValue, StringId, StringTable, TypedColumn};
+pub use column_store::{
+    BatchUpdate, BatchUpdateResult, BatchUpsertResult, ColumnStore, ColumnStoreError, ColumnType,
+    ColumnValue, ExpireResult, StringId, StringTable, TypedColumn, UpsertResult,
+};
 pub use config::{
     ConfigError, HnswConfig, LimitsConfig, LoggingConfig, QuantizationConfig, SearchConfig,
     SearchMode, ServerConfig, StorageConfig, VelesConfig,
