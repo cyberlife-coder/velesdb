@@ -133,8 +133,79 @@ When combining vector and graph results:
 | Tauri | `invoke('plugin:velesdb\|query')` | ✅ |
 | REST API | `POST /collections/{name}/query` | ✅ |
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        VelesQL Parser                           │
+│   "MATCH (d:Doc) JOIN prices ON ... WHERE vector NEAR $v"       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Filter Pushdown Analysis                     │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐         │
+│  │ Graph       │  │ ColumnStore  │  │ Post-JOIN      │         │
+│  │ Filters     │  │ Filters      │  │ Filters        │         │
+│  └─────────────┘  └──────────────┘  └────────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+          │                  │                   │
+          ▼                  ▼                   │
+┌─────────────────┐  ┌─────────────────┐        │
+│   Graph Engine  │  │ ColumnStore     │        │
+│ ┌─────────────┐ │  │ ┌─────────────┐ │        │
+│ │ HNSW Vector │ │  │ │ B-Tree      │ │        │
+│ │ Index       │ │  │ │ Indexes     │ │        │
+│ └─────────────┘ │  │ └─────────────┘ │        │
+│ ┌─────────────┐ │  │ ┌─────────────┐ │        │
+│ │ Graph       │ │  │ │ Column      │ │        │
+│ │ Traversal   │ │  │ │ Storage     │ │        │
+│ └─────────────┘ │  │ └─────────────┘ │        │
+└─────────────────┘  └─────────────────┘        │
+          │                  │                   │
+          └────────┬─────────┘                   │
+                   ▼                             │
+┌─────────────────────────────────────────────────────────────────┐
+│                    JOIN Executor (Batch Adaptive)               │
+│   Combines Graph results with ColumnStore data                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Score Evaluator                              │
+│   ORDER BY 0.7 * vector_score + 0.3 * graph_score DESC         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    HybridResult[]                               │
+│   { nodeId, vectorScore, graphScore, fusedScore, bindings }    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Troubleshooting
+
+### Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Parameter '$v' not provided` | Missing query vector | Add vector to params: `params={"v": [...]}` |
+| `Collection not found` | Wrong collection name | Check collection exists with `db.list_collections()` |
+| `Unknown column` | Invalid field in WHERE | Verify field exists in payload |
+| `Dimension mismatch` | Vector size ≠ collection dimension | Check embedding dimension |
+
+### Performance Tips
+
+1. **Always set LIMIT** - Unbounded queries scan entire collection
+2. **Filter early** - High-selectivity filters reduce candidates
+3. **Use indexes** - Create property indexes for filtered fields
+4. **Batch queries** - Use multi-query fusion for multiple vectors
+5. **Monitor timing** - Check `timing_ms` in response
+
 ## See Also
 
 - [VelesQL Specification](../reference/VELESQL_SPEC.md)
-- [Search Modes](../SEARCH_MODES.md)
+- [JOIN Reference](../reference/VELESQL_JOIN.md)
+- [ORDER BY Reference](../reference/VELESQL_ORDERBY.md)
+- [Search Modes](./SEARCH_MODES.md)
 - [Benchmarks](../BENCHMARKS.md)
