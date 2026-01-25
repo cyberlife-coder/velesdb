@@ -17,6 +17,7 @@ Example:
 from typing import Any, Dict, List, Optional
 import time
 import json
+import uuid
 
 try:
     from langchain.memory.chat_memory import BaseChatMemory
@@ -77,7 +78,8 @@ class VelesDBChatMemory(BaseChatMemory):
         self.dimension = dimension
         self._db = velesdb.Database(path)
         self._memory = self._db.agent_memory(dimension=dimension)
-        self._message_counter = int(time.time() * 1000)  # Start with timestamp-based ID
+        # Use timestamp + UUID suffix to avoid collisions between concurrent instances
+        self._message_counter = int(time.time() * 1000) + (uuid.uuid4().int % 1000000)
 
     @property
     def memory_variables(self) -> List[str]:
@@ -138,7 +140,7 @@ class VelesDBChatMemory(BaseChatMemory):
         clearing the episodic memory for new conversations.
         """
         # Reinitialize memory (collections will be reused but new session)
-        self._message_counter = int(time.time() * 1000)
+        self._message_counter = int(time.time() * 1000) + (uuid.uuid4().int % 1000000)
 
     def _events_to_messages(self, events: List) -> List[BaseMessage]:
         """Convert episodic events to LangChain messages."""
