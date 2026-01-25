@@ -246,6 +246,97 @@ await db.flush('documents');
 
 Close the client and release resources.
 
+## Knowledge Graph API (v1.2.0+)
+
+VelesDB supports hybrid vector + graph queries. Build knowledge graphs alongside your embeddings.
+
+### `db.addEdge(collection, edge)`
+
+Add an edge to the collection's knowledge graph.
+
+```typescript
+await db.addEdge('social', {
+  id: 1,
+  source: 100,      // source node ID
+  target: 200,      // target node ID
+  label: 'FOLLOWS',
+  properties: { since: '2024-01-01' }
+});
+```
+
+### `db.getEdges(collection, options?)`
+
+Get edges from the knowledge graph.
+
+```typescript
+// Get all edges with label "FOLLOWS"
+const edges = await db.getEdges('social', { label: 'FOLLOWS' });
+```
+
+### `db.traverseGraph(collection, request)`
+
+Traverse the graph using BFS or DFS from a source node.
+
+```typescript
+const result = await db.traverseGraph('social', {
+  source: 100,
+  strategy: 'bfs',    // or 'dfs'
+  maxDepth: 3,
+  limit: 100,
+  relTypes: ['FOLLOWS', 'KNOWS']
+});
+
+for (const node of result.results) {
+  console.log(`Reached node ${node.targetId} at depth ${node.depth}`);
+}
+```
+
+### `db.getNodeDegree(collection, nodeId)`
+
+Get the in-degree and out-degree of a node.
+
+```typescript
+const degree = await db.getNodeDegree('social', 100);
+console.log(`In: ${degree.inDegree}, Out: ${degree.outDegree}`);
+```
+
+## VelesQL Query Builder (v1.2.0+)
+
+Build type-safe VelesQL queries with the fluent builder API.
+
+```typescript
+import { velesql } from '@wiscale/velesdb-sdk';
+
+// Simple vector search
+const query = velesql()
+  .from('documents')
+  .near('$queryVector')
+  .limit(10)
+  .build();
+
+// With filters
+const filtered = velesql()
+  .from('products')
+  .near('$v')
+  .where('category', '=', 'electronics')
+  .where('price', '<', 1000)
+  .orderBy('price', 'ASC')
+  .limit(20)
+  .build();
+
+// Graph pattern matching
+const graphQuery = velesql()
+  .match('p', 'Person')
+  .rel('KNOWS')
+  .to('f', 'Person')
+  .where('p.age', '>', 25)
+  .return(['p.name', 'f.name'])
+  .build();
+
+// Execute the query
+const results = await db.query('collection', query.query, query.params);
+```
+
 ## Error Handling
 
 ```typescript
