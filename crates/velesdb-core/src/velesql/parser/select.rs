@@ -1,6 +1,6 @@
 //! SELECT statement parsing.
 
-use super::Rule;
+use super::{extract_identifier, Rule};
 use crate::velesql::ast::{
     AggregateArg, AggregateFunction, AggregateType, Column, ColumnRef, CompareOp, CompoundQuery,
     GroupByClause, HavingClause, HavingCondition, JoinClause, JoinCondition, OrderByExpr, Query,
@@ -90,7 +90,7 @@ impl Parser {
                     columns = Self::parse_select_list(inner_pair)?;
                 }
                 Rule::identifier => {
-                    from = inner_pair.as_str().to_string();
+                    from = extract_identifier(&inner_pair);
                 }
                 Rule::join_clause => {
                     joins.push(Self::parse_join_clause(inner_pair)?);
@@ -197,7 +197,7 @@ impl Parser {
                     return Ok((OrderByExpr::Aggregate(agg), false));
                 }
                 Rule::identifier => {
-                    return Ok((OrderByExpr::Field(inner_pair.as_str().to_string()), false));
+                    return Ok((OrderByExpr::Field(extract_identifier(&inner_pair)), false));
                 }
                 _ => {}
             }
@@ -314,7 +314,7 @@ impl Parser {
                     argument = Some(arg);
                 }
                 Rule::identifier => {
-                    alias = Some(inner_pair.as_str().to_string());
+                    alias = Some(extract_identifier(&inner_pair));
                 }
                 _ => {}
             }
@@ -443,12 +443,12 @@ impl Parser {
                     join_type = Self::parse_join_type(inner_pair.as_str());
                 }
                 Rule::identifier => {
-                    table = inner_pair.as_str().to_string();
+                    table = extract_identifier(&inner_pair);
                 }
                 Rule::alias_clause => {
                     for alias_inner in inner_pair.into_inner() {
                         if alias_inner.as_rule() == Rule::identifier {
-                            alias = Some(alias_inner.as_str().to_string());
+                            alias = Some(extract_identifier(&alias_inner));
                         }
                     }
                 }
@@ -466,7 +466,7 @@ impl Parser {
                                 let cols: Vec<String> = spec_inner
                                     .into_inner()
                                     .filter(|p| p.as_rule() == Rule::identifier)
-                                    .map(|p| p.as_str().to_string())
+                                    .map(|p| extract_identifier(&p))
                                     .collect();
                                 using_columns = Some(cols);
                             }
@@ -567,7 +567,7 @@ impl Parser {
             if inner_pair.as_rule() == Rule::group_by_list {
                 for col_pair in inner_pair.into_inner() {
                     if col_pair.as_rule() == Rule::identifier {
-                        columns.push(col_pair.as_str().to_string());
+                        columns.push(extract_identifier(&col_pair));
                     }
                 }
             }
@@ -686,7 +686,9 @@ impl Parser {
 
                                 for part in option.into_inner() {
                                     match part.as_rule() {
-                                        Rule::identifier => key = part.as_str().to_lowercase(),
+                                        Rule::identifier => {
+                                            key = extract_identifier(&part).to_lowercase();
+                                        }
                                         Rule::fusion_value => {
                                             value_str =
                                                 part.as_str().trim_matches('\'').to_string();

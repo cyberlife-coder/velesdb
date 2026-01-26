@@ -1,6 +1,6 @@
 //! WHERE clause and condition parsing.
 
-use super::Rule;
+use super::{extract_identifier, Rule};
 use crate::velesql::ast::{
     BetweenCondition, CompareOp, Comparison, Condition, FusionConfig, InCondition, IsNullCondition,
     LikeCondition, MatchCondition, SimilarityCondition, VectorExpr, VectorFusedSearch,
@@ -385,7 +385,7 @@ impl Parser {
         for inner in pair.into_inner() {
             match inner.as_rule() {
                 Rule::identifier => {
-                    column = inner.as_str().to_string();
+                    column = extract_identifier(&inner);
                 }
                 Rule::not_kw => {
                     has_not = true;
@@ -409,11 +409,10 @@ impl Parser {
     ) -> Result<Condition, ParseError> {
         let mut inner = pair.into_inner();
 
-        let column = inner
+        let column_pair = inner
             .next()
-            .ok_or_else(|| ParseError::syntax(0, "", "Expected column name"))?
-            .as_str()
-            .to_string();
+            .ok_or_else(|| ParseError::syntax(0, "", "Expected column name"))?;
+        let column = extract_identifier(&column_pair);
 
         let op_pair = inner
             .next()
