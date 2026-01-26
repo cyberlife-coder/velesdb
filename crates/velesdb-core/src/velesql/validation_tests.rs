@@ -353,3 +353,140 @@ fn create_simple_query() -> Query {
         compound: None,
     }
 }
+
+// ============================================================================
+// Regression tests for PR #116 review bugs
+// ============================================================================
+
+#[test]
+fn test_validate_vector_search_near_detected() {
+    // BUG-001 regression: VectorSearch (NEAR) was not being validated
+    use crate::velesql::ast::VectorSearch;
+
+    let near1 = Condition::VectorSearch(VectorSearch {
+        vector: VectorExpr::Parameter("v1".to_string()),
+    });
+    let near2 = Condition::VectorSearch(VectorSearch {
+        vector: VectorExpr::Parameter("v2".to_string()),
+    });
+
+    let query = Query {
+        select: SelectStatement {
+            columns: SelectColumns::All,
+            from: "docs".to_string(),
+            joins: vec![],
+            where_clause: Some(Condition::And(Box::new(near1), Box::new(near2))),
+            order_by: None,
+            limit: None,
+            offset: None,
+            with_clause: None,
+            group_by: None,
+            having: None,
+            fusion_clause: None,
+        },
+        compound: None,
+    };
+
+    // Should detect multiple vector search conditions
+    let result = QueryValidator::validate(&query);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.kind, ValidationErrorKind::MultipleSimilarity);
+}
+
+#[test]
+fn test_validate_vector_search_or_detected() {
+    // BUG-001 regression: VectorSearch with OR was not being validated
+    use crate::velesql::ast::VectorSearch;
+
+    let near = Condition::VectorSearch(VectorSearch {
+        vector: VectorExpr::Parameter("v".to_string()),
+    });
+    let meta = Condition::Comparison(Comparison {
+        column: "category".to_string(),
+        operator: CompareOp::Eq,
+        value: Value::String("tech".to_string()),
+    });
+
+    let query = Query {
+        select: SelectStatement {
+            columns: SelectColumns::All,
+            from: "docs".to_string(),
+            joins: vec![],
+            where_clause: Some(Condition::Or(Box::new(near), Box::new(meta))),
+            order_by: None,
+            limit: None,
+            offset: None,
+            with_clause: None,
+            group_by: None,
+            having: None,
+            fusion_clause: None,
+        },
+        compound: None,
+    };
+
+    // Should detect NEAR with OR
+    let result = QueryValidator::validate(&query);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.kind, ValidationErrorKind::SimilarityWithOr);
+}
+
+#[test]
+fn test_validate_compound_query_where_clause() {
+    // BUG-002 regression: Compound query's WHERE clause was not being validated
+    use crate::velesql::ast::{CompoundQuery, SetOperator};
+
+    let sim1 = Condition::Similarity(SimilarityCondition {
+        field: "v".to_string(),
+        vector: VectorExpr::Parameter("v1".to_string()),
+        operator: CompareOp::Gt,
+        threshold: 0.8,
+    });
+    let sim2 = Condition::Similarity(SimilarityCondition {
+        field: "v".to_string(),
+        vector: VectorExpr::Parameter("v2".to_string()),
+        operator: CompareOp::Gt,
+        threshold: 0.7,
+    });
+
+    // Main SELECT has no similarity
+    // But UNION's right side has multiple similarity conditions (invalid)
+    let query = Query {
+        select: SelectStatement {
+            columns: SelectColumns::All,
+            from: "docs".to_string(),
+            joins: vec![],
+            where_clause: None, // No similarity in main SELECT
+            order_by: None,
+            limit: Some(10),
+            offset: None,
+            with_clause: None,
+            group_by: None,
+            having: None,
+            fusion_clause: None,
+        },
+        compound: Some(CompoundQuery {
+            operator: SetOperator::Union,
+            right: Box::new(SelectStatement {
+                columns: SelectColumns::All,
+                from: "docs".to_string(),
+                joins: vec![],
+                where_clause: Some(Condition::And(Box::new(sim1), Box::new(sim2))),
+                order_by: None,
+                limit: None,
+                offset: None,
+                with_clause: None,
+                group_by: None,
+                having: None,
+                fusion_clause: None,
+            }),
+        }),
+    };
+
+    // Should detect multiple similarity in compound query
+    let result = QueryValidator::validate(&query);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.kind, ValidationErrorKind::MultipleSimilarity);
+}

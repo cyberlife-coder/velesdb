@@ -213,9 +213,16 @@ impl QueryValidator {
         query: &Query,
         config: &ValidationConfig,
     ) -> Result<(), ValidationError> {
-        // Validate WHERE clause if present
+        // Validate main SELECT's WHERE clause if present
         if let Some(ref condition) = query.select.where_clause {
             Self::validate_condition(condition, query.select.limit, config)?;
+        }
+
+        // Validate compound query's WHERE clause if present (UNION, INTERSECT, EXCEPT)
+        if let Some(ref compound) = query.compound {
+            if let Some(ref condition) = compound.right.where_clause {
+                Self::validate_condition(condition, compound.right.limit, config)?;
+            }
         }
 
         Ok(())
@@ -253,10 +260,13 @@ impl QueryValidator {
         Ok(())
     }
 
-    /// Counts the number of similarity conditions in a condition tree.
+    /// Counts the number of vector search conditions in a condition tree.
+    /// Includes Similarity, VectorSearch (NEAR), and VectorFusedSearch (NEAR_FUSED).
     fn count_similarity_conditions(condition: &Condition) -> usize {
         match condition {
-            Condition::Similarity(_) => 1,
+            Condition::Similarity(_)
+            | Condition::VectorSearch(_)
+            | Condition::VectorFusedSearch(_) => 1,
             Condition::And(left, right) | Condition::Or(left, right) => {
                 Self::count_similarity_conditions(left) + Self::count_similarity_conditions(right)
             }
@@ -282,10 +292,13 @@ impl QueryValidator {
         }
     }
 
-    /// Checks if a condition tree contains any similarity condition.
+    /// Checks if a condition tree contains any vector search condition.
+    /// Includes Similarity, VectorSearch (NEAR), and VectorFusedSearch (NEAR_FUSED).
     fn contains_similarity(condition: &Condition) -> bool {
         match condition {
-            Condition::Similarity(_) => true,
+            Condition::Similarity(_)
+            | Condition::VectorSearch(_)
+            | Condition::VectorFusedSearch(_) => true,
             Condition::And(left, right) | Condition::Or(left, right) => {
                 Self::contains_similarity(left) || Self::contains_similarity(right)
             }
