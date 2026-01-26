@@ -13,6 +13,7 @@
 //! - Linux: `fallocate(FALLOC_FL_PUNCH_HOLE)`
 //! - Windows: `FSCTL_SET_ZERO_DATA`
 
+use super::sharded_index::ShardedIndex;
 use memmap2::MmapMut;
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -214,10 +215,11 @@ fn atomic_replace(src: &Path, dst: &Path) -> io::Result<()> {
 }
 
 /// Compaction configuration and state.
+/// EPIC-033/US-004: Updated to use ShardedIndex for reduced lock contention.
 pub(super) struct CompactionContext<'a> {
     pub path: &'a Path,
     pub dimension: usize,
-    pub index: &'a RwLock<FxHashMap<u64, usize>>,
+    pub index: &'a ShardedIndex,
     pub mmap: &'a RwLock<MmapMut>,
     pub next_offset: &'a AtomicUsize,
     pub wal: &'a RwLock<io::BufWriter<File>>,
@@ -246,12 +248,10 @@ impl CompactionContext<'_> {
     pub fn compact(&self) -> io::Result<usize> {
         let vector_size = self.dimension * std::mem::size_of::<f32>();
 
-        // 1. Get current state
-        let index = self.index.read();
-        let active_count = index.len();
+        // 1. Get current state (EPIC-033/US-004: Use ShardedIndex)
+        let active_count = self.index.len();
 
         if active_count == 0 {
-            drop(index);
             return Ok(0);
         }
 
@@ -260,7 +260,6 @@ impl CompactionContext<'_> {
         let active_size = active_count * vector_size;
 
         if current_offset <= active_size {
-            drop(index);
             return Ok(0);
         }
 
@@ -283,12 +282,14 @@ impl CompactionContext<'_> {
         let mut temp_mmap = unsafe { MmapMut::map_mut(&temp_file)? };
 
         // 3. Copy active vectors to new file with new offsets
+        // EPIC-033/US-004: Snapshot index to HashMap for iteration
+        let old_index = self.index.to_hashmap();
         let mmap = self.mmap.read();
         let mut new_index: FxHashMap<u64, usize> = FxHashMap::default();
         new_index.reserve(active_count);
 
         let mut new_offset = 0usize;
-        for (&id, &old_offset) in index.iter() {
+        for (&id, &old_offset) in &old_index {
             let src = &mmap[old_offset..old_offset + vector_size];
             temp_mmap[new_offset..new_offset + vector_size].copy_from_slice(src);
             new_index.insert(id, new_offset);
@@ -296,7 +297,6 @@ impl CompactionContext<'_> {
         }
 
         drop(mmap);
-        drop(index);
 
         // 4. Flush temp file
         temp_mmap.flush()?;
@@ -312,9 +312,12 @@ impl CompactionContext<'_> {
         // SAFETY: new_data_file is the compacted file just renamed from temp
         let new_mmap = unsafe { MmapMut::map_mut(&new_data_file)? };
 
-        // 7. Update internal state
+        // 7. Update internal state (EPIC-033/US-004: Clear and repopulate ShardedIndex)
         *self.mmap.write() = new_mmap;
-        *self.index.write() = new_index;
+        self.index.clear();
+        for (id, offset) in new_index {
+            self.index.insert(id, offset);
+        }
         self.next_offset.store(new_offset, Ordering::Relaxed);
 
         // 8. Write compaction marker to WAL
@@ -333,9 +336,8 @@ impl CompactionContext<'_> {
     /// A ratio > 0.3 (30% fragmentation) is a good threshold.
     #[must_use]
     pub fn fragmentation_ratio(&self) -> f64 {
-        let index = self.index.read();
-        let active_count = index.len();
-        drop(index);
+        // EPIC-033/US-004: Use ShardedIndex directly
+        let active_count = self.index.len();
 
         if active_count == 0 {
             return 0.0;
