@@ -345,7 +345,10 @@ impl Collection {
                 };
 
                 if passes {
-                    // Update score to reflect the similarity() vector score
+                    // EPIC-044 US-001: Update score to reflect THIS similarity filter's score.
+                    // When multiple similarity() conditions are used (cascade filtering),
+                    // the final score will be from the LAST filter applied.
+                    // This is intentional: each filter re-scores against its vector.
                     r.score = score;
                     Some(r)
                 } else {
