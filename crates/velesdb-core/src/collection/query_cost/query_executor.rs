@@ -74,10 +74,8 @@ impl PlanCache {
     pub fn invalidate_collection(&self, collection: &str) {
         let mut cache = self.cache.write();
         cache.retain(|_, v| {
-            // Check both description and plan's collection field
-            let in_desc = v.plan.description.contains(collection);
-            let in_plan = Self::plan_references_collection(&v.plan.plan, collection);
-            !in_desc && !in_plan
+            // Use exact match via plan traversal (avoids substring false positives)
+            !Self::plan_references_collection(&v.plan.plan, collection)
         });
     }
 
@@ -203,6 +201,19 @@ impl QueryOptimizer {
 
         if let Some(k) = query.top_k {
             k.hash(&mut hasher);
+        }
+
+        // Include ef_search, max_depth, limit in cache key (PR #152 bug fix)
+        if let Some(ef) = query.ef_search {
+            ef.hash(&mut hasher);
+        }
+
+        if let Some(depth) = query.max_depth {
+            depth.hash(&mut hasher);
+        }
+
+        if let Some(lim) = query.limit {
+            lim.hash(&mut hasher);
         }
 
         hasher.finish()

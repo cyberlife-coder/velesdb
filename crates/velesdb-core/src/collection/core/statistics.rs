@@ -29,6 +29,8 @@ impl Collection {
         let mut collector = StatsCollector::new();
 
         // Basic counts from config
+        // Note: deleted_count and column_stats are placeholders for future tombstone tracking
+        // and per-column cardinality analysis (EPIC-046 future work)
         let config = self.config.read();
         collector.set_row_count(config.point_count as u64);
 
@@ -51,10 +53,15 @@ impl Collection {
     ///
     /// This is a convenience method that avoids recomputing statistics
     /// if they were recently computed. For fresh statistics, use `analyze()`.
+    ///
+    /// # Note
+    /// Returns default stats on error (intentional for convenience).
+    /// Use `analyze()` directly if error handling is required.
     #[must_use]
     pub fn get_stats(&self) -> CollectionStats {
         // For now, always compute fresh stats
         // Future: implement caching with TTL
+        // Design: returns default on error for convenience (caller can use analyze() for errors)
         self.analyze().unwrap_or_default()
     }
 
