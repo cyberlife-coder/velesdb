@@ -76,18 +76,25 @@ impl PlanCache {
         cache.retain(|_, v| {
             // Check both description and plan's collection field
             let in_desc = v.plan.description.contains(collection);
-            let in_plan = match &v.plan.plan {
-                super::plan_generator::PhysicalPlan::SeqScan { collection: c, .. }
-                | super::plan_generator::PhysicalPlan::IndexScan { collection: c, .. }
-                | super::plan_generator::PhysicalPlan::VectorSearch { collection: c, .. }
-                | super::plan_generator::PhysicalPlan::GraphTraversal { collection: c, .. } => {
-                    c == collection
-                }
-                super::plan_generator::PhysicalPlan::Filter { .. }
-                | super::plan_generator::PhysicalPlan::Limit { .. } => false,
-            };
+            let in_plan = Self::plan_references_collection(&v.plan.plan, collection);
             !in_desc && !in_plan
         });
+    }
+
+    /// Recursively checks if a plan references a collection.
+    fn plan_references_collection(plan: &super::plan_generator::PhysicalPlan, collection: &str) -> bool {
+        match plan {
+            super::plan_generator::PhysicalPlan::SeqScan { collection: c, .. }
+            | super::plan_generator::PhysicalPlan::IndexScan { collection: c, .. }
+            | super::plan_generator::PhysicalPlan::VectorSearch { collection: c, .. }
+            | super::plan_generator::PhysicalPlan::GraphTraversal { collection: c, .. } => {
+                c == collection
+            }
+            super::plan_generator::PhysicalPlan::Filter { input, .. }
+            | super::plan_generator::PhysicalPlan::Limit { input, .. } => {
+                Self::plan_references_collection(input, collection)
+            }
+        }
     }
 
     /// Clears all cached plans.
@@ -414,5 +421,43 @@ mod tests {
         let key2 = QueryOptimizer::compute_cache_key(&query);
 
         assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn test_invalidate_nested_filter_plans() {
+        // Regression test for PR #152: nested Filter/Limit plans must be invalidated
+        use crate::collection::query_cost::plan_generator::PhysicalPlan;
+
+        // Test that plan_references_collection correctly identifies nested plans
+        let nested_plan = PhysicalPlan::Filter {
+            input: Box::new(PhysicalPlan::VectorSearch {
+                collection: "docs".to_string(),
+                k: 10,
+                ef_search: 100,
+            }),
+            selectivity: 0.5,
+        };
+
+        assert!(
+            PlanCache::plan_references_collection(&nested_plan, "docs"),
+            "Should find collection in nested Filter plan"
+        );
+
+        let double_nested = PhysicalPlan::Limit {
+            input: Box::new(nested_plan),
+            limit: 5,
+            offset: 0,
+        };
+
+        assert!(
+            PlanCache::plan_references_collection(&double_nested, "docs"),
+            "Should find collection in double-nested Limit->Filter plan"
+        );
+
+        // Ensure it returns false for different collection
+        assert!(
+            !PlanCache::plan_references_collection(&double_nested, "other"),
+            "Should NOT find unrelated collection"
+        );
     }
 }
