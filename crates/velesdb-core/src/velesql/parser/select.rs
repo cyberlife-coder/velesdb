@@ -64,7 +64,15 @@ impl Parser {
                                 expression: match ob.expr {
                                     OrderByExpr::Field(f) => f,
                                     OrderByExpr::Similarity(s) => {
-                                        format!("similarity({}, $query)", s.field)
+                                        let vec_str = match &s.vector {
+                                            crate::velesql::ast::VectorExpr::Parameter(name) => {
+                                                format!("${name}")
+                                            }
+                                            crate::velesql::ast::VectorExpr::Literal(vals) => {
+                                                format!("{vals:?}")
+                                            }
+                                        };
+                                        format!("similarity({}, {vec_str})", s.field)
                                     }
                                     OrderByExpr::Aggregate(a) => format!("{:?}()", a.function_type),
                                 },
