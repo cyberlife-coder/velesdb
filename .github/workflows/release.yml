@@ -87,10 +87,10 @@ jobs:
         with:
           shared-key: "release-${{ matrix.target }}"
 
-      # Note: taiki-e/install-action uses version tags by design (downloads tools at runtime)
+      # Note: taiki-e/install-action - uses version tags (downloads tools at runtime)
       - name: Install cargo-deb (Linux)
         if: runner.os == 'Linux'
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.67.15
         with:
           tool: cargo-deb
 
@@ -242,8 +242,8 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
 
-      # Note: taiki-e/install-action uses version tags by design (downloads tools at runtime)
-      - uses: taiki-e/install-action@v2
+      # Note: taiki-e/install-action - uses version tags (downloads tools at runtime)
+      - uses: taiki-e/install-action@v2.67.15
         with:
           tool: wasm-pack
 
