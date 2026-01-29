@@ -27,13 +27,15 @@ mod filter;
 mod string_table;
 mod types;
 
+use roaring::RoaringBitmap;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 pub use string_table::StringTable;
 pub use types::{
-    BatchUpdate, BatchUpdateResult, BatchUpsertResult, ColumnStoreError, ColumnType, ColumnValue,
-    ExpireResult, StringId, TypedColumn, UpsertResult, VacuumConfig, VacuumStats,
+    AutoVacuumConfig, BatchUpdate, BatchUpdateResult, BatchUpsertResult, ColumnStoreError,
+    ColumnType, ColumnValue, ExpireResult, StringId, TypedColumn, UpsertResult, VacuumConfig,
+    VacuumStats,
 };
 
 /// Column store for high-performance filtering.
@@ -51,8 +53,10 @@ pub struct ColumnStore {
     primary_index: HashMap<i64, usize>,
     /// Reverse index: row_idx → pk_value (O(1) reverse lookup for expire_rows)
     row_idx_to_pk: HashMap<usize, i64>,
-    /// Deleted row indices (tombstones)
+    /// Deleted row indices (tombstones) - FxHashSet for backward compatibility
     pub(crate) deleted_rows: rustc_hash::FxHashSet<usize>,
+    /// Deleted row bitmap (EPIC-043 US-002) - RoaringBitmap for O(1) contains
+    deletion_bitmap: RoaringBitmap,
     /// Row expiry timestamps: row_idx → expiry_timestamp (US-004 TTL)
     row_expiry: HashMap<usize, u64>,
 }
@@ -271,6 +275,7 @@ impl ColumnStore {
     /// Deletes a row by primary key value.
     ///
     /// Also clears any TTL metadata to prevent false-positive expirations.
+    /// Updates both FxHashSet and RoaringBitmap (EPIC-043 US-002).
     pub fn delete_by_pk(&mut self, pk: i64) -> bool {
         let Some(&row_idx) = self.primary_index.get(&pk) else {
             return false;
@@ -279,6 +284,10 @@ impl ColumnStore {
             return false;
         }
         self.deleted_rows.insert(row_idx);
+        // EPIC-043 US-002: Also update RoaringBitmap for O(1) contains
+        if let Ok(idx) = u32::try_from(row_idx) {
+            self.deletion_bitmap.insert(idx);
+        }
         self.row_expiry.remove(&row_idx);
         true
     }
@@ -482,6 +491,7 @@ impl ColumnStore {
         // Phase 6: Clear tombstones and update row count
         stats.tombstones_removed = self.deleted_rows.len();
         self.deleted_rows.clear();
+        self.deletion_bitmap.clear(); // EPIC-043 US-002: Also clear RoaringBitmap
         self.row_count = new_row_count;
 
         stats.completed = true;
@@ -556,5 +566,42 @@ impl ColumnStore {
         }
         let ratio = self.deleted_rows.len() as f64 / self.row_count as f64;
         ratio >= threshold
+    }
+
+    // =========================================================================
+    // EPIC-043 US-002: RoaringBitmap Filtering
+    // =========================================================================
+
+    /// Checks if a row is deleted using RoaringBitmap (O(1) lookup).
+    ///
+    /// This is faster than FxHashSet for large deletion sets.
+    #[must_use]
+    #[inline]
+    pub fn is_row_deleted_bitmap(&self, row_idx: usize) -> bool {
+        if let Ok(idx) = u32::try_from(row_idx) {
+            self.deletion_bitmap.contains(idx)
+        } else {
+            // Fallback to FxHashSet for indices > u32::MAX
+            self.deleted_rows.contains(&row_idx)
+        }
+    }
+
+    /// Returns an iterator over live (non-deleted) row indices.
+    ///
+    /// Uses RoaringBitmap for efficient filtering.
+    pub fn live_row_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        (0..self.row_count).filter(|&idx| !self.is_row_deleted_bitmap(idx))
+    }
+
+    /// Returns the deletion bitmap for advanced filtering operations.
+    #[must_use]
+    pub fn deletion_bitmap(&self) -> &RoaringBitmap {
+        &self.deletion_bitmap
+    }
+
+    /// Returns the number of deleted rows using the bitmap (O(1)).
+    #[must_use]
+    pub fn deleted_count_bitmap(&self) -> u64 {
+        self.deletion_bitmap.len()
     }
 }

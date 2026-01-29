@@ -244,3 +244,90 @@ pub struct VacuumStats {
     /// Whether vacuum completed successfully.
     pub completed: bool,
 }
+
+// =============================================================================
+// EPIC-043 US-003: Auto-Vacuum Configuration
+// =============================================================================
+
+/// Configuration for automatic vacuum triggering.
+///
+/// Based on PostgreSQL best practices:
+/// - Default threshold: 20% (same as PostgreSQL autovacuum_vacuum_scale_factor)
+/// - Check interval: 300s (5 minutes)
+#[derive(Debug, Clone)]
+pub struct AutoVacuumConfig {
+    /// Enable automatic vacuum.
+    pub enabled: bool,
+    /// Trigger when deletion ratio exceeds this (0.0-1.0).
+    /// PostgreSQL default is 0.20 (20%).
+    pub threshold_ratio: f64,
+    /// Minimum number of deleted rows before considering vacuum.
+    /// PostgreSQL default is 50.
+    pub min_dead_rows: usize,
+    /// How often to check for vacuum need (seconds).
+    pub check_interval_secs: u64,
+}
+
+impl Default for AutoVacuumConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            threshold_ratio: 0.20, // PostgreSQL default
+            min_dead_rows: 50,     // PostgreSQL default
+            check_interval_secs: 300,
+        }
+    }
+}
+
+impl AutoVacuumConfig {
+    /// Creates a new auto-vacuum config with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Builder: enable/disable auto-vacuum.
+    #[must_use]
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Builder: set threshold ratio (0.0-1.0).
+    #[must_use]
+    pub fn with_threshold(mut self, threshold: f64) -> Self {
+        self.threshold_ratio = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Builder: set minimum dead rows.
+    #[must_use]
+    pub fn with_min_dead_rows(mut self, min: usize) -> Self {
+        self.min_dead_rows = min;
+        self
+    }
+
+    /// Builder: set check interval in seconds.
+    #[must_use]
+    pub fn with_check_interval(mut self, secs: u64) -> Self {
+        self.check_interval_secs = secs;
+        self
+    }
+
+    /// Checks if vacuum should be triggered based on current stats.
+    #[must_use]
+    pub fn should_trigger(&self, row_count: usize, deleted_count: usize) -> bool {
+        if !self.enabled || row_count == 0 {
+            return false;
+        }
+
+        // Must have minimum dead rows
+        if deleted_count < self.min_dead_rows {
+            return false;
+        }
+
+        // Check threshold ratio
+        let ratio = deleted_count as f64 / row_count as f64;
+        ratio >= self.threshold_ratio
+    }
+}
