@@ -438,8 +438,8 @@ fn test_explain_hybrid_query() {
 
     // Check weights are equal (1/3 each)
     for comp in &explanation.components {
-        if comp.weight.is_some() {
-            assert!((comp.weight.unwrap() - 0.333).abs() < 0.01);
+        if let Some(weight) = comp.weight {
+            assert!((weight - 0.333).abs() < 0.01);
         }
     }
 }
