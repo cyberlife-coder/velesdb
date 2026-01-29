@@ -16,9 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bundle optimization documentation (`docs/wasm/bundle-optimization.md`)
   - 6 new TDD tests for worker infrastructure
 
-- **EPIC-061: Massive Refactoring** (US-002)
+- **EPIC-061: Massive Refactoring** (US-002, US-003)
   - Extract `match_parser.rs` from `select.rs` (1068→742 lines, 31% reduction)
-  - MATCH query parsing functions now in dedicated module
+  - Extract `distinct.rs` from `query/mod.rs` (791→745 lines, 6% reduction)
+  - MATCH query parsing and DISTINCT deduplication now in dedicated modules
 
 - **EPIC-052: VelesQL Advanced Features** ✅ COMPLETE
   - `detect_query_type()` for unified /query endpoint routing
