@@ -196,12 +196,16 @@ impl FusionStrategy {
             }
             Self::Weighted => {
                 // Equal weights for now - could be configurable
+                // SAFETY: scores.len() is typically < 100, fits in f32 with full precision
+                #[allow(clippy::cast_precision_loss)]
                 let weight = 1.0 / scores.len() as f32;
                 scores.iter().map(|&s| s * weight).sum()
             }
             Self::Maximum => scores.iter().copied().fold(f32::MIN, f32::max),
             Self::Minimum => scores.iter().copied().fold(f32::MAX, f32::min),
             Self::Product => scores.iter().copied().product(),
+            // SAFETY: scores.len() is typically < 100, fits in f32 with full precision
+            #[allow(clippy::cast_precision_loss)]
             Self::Average => scores.iter().sum::<f32>() / scores.len() as f32,
         };
 

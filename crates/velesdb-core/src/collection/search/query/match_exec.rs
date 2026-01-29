@@ -303,7 +303,8 @@ impl Collection {
 
         // Default to at least 1 if we have relationships
         if max_depth == 0 && !pattern.relationships.is_empty() {
-            max_depth = pattern.relationships.len() as u32;
+            // SAFETY: Pattern relationships count is typically < 10, capped at 10 anyway
+            max_depth = u32::try_from(pattern.relationships.len()).unwrap_or(10);
         }
 
         max_depth.min(10) // Cap at 10 for safety
