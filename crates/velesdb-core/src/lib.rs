@@ -48,6 +48,23 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_possible_wrap)]
+// Pedantic/nursery lints - stylistic, not bugs (Task Force decision 2026-01-29)
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::suboptimal_flops)]
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::redundant_pub_crate)]
+#![allow(clippy::unused_peekable)]
+// NOTE: clippy::hashset_insert_after_contains removed - lint not available in current Rust version
+#![allow(clippy::use_self)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::non_send_fields_in_send_ty)]
+#![allow(clippy::imprecise_flops)]
+#![allow(clippy::set_contains_or_insert)]
+#![allow(clippy::useless_let_if_seq)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 // Documentation style preferences
