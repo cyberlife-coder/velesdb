@@ -295,7 +295,10 @@ fn test_thread_config_auto() {
     // Should be at least 1 thread
     assert!(threads >= 1);
     // Should be less than or equal to CPU count
-    assert!(threads <= num_cpus::get());
+    let cpu_count = std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(1);
+    assert!(threads <= cpu_count);
 }
 
 #[test]
@@ -311,15 +314,13 @@ fn test_parallel_config_builder() {
         .with_parallel_threshold(50)
         .with_min_frontier(25)
         .with_limit(500)
-        .with_fixed_threads(8)
-        .with_work_stealing(false);
+        .with_fixed_threads(8);
 
     assert_eq!(config.max_depth, 10);
     assert_eq!(config.parallel_threshold, 50);
     assert_eq!(config.min_frontier_for_parallel, 25);
     assert_eq!(config.limit, 500);
     assert_eq!(config.threads, ThreadConfig::Fixed(8));
-    assert!(!config.work_stealing);
 }
 
 #[test]

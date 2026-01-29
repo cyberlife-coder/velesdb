@@ -71,7 +71,10 @@ impl ThreadConfig {
     pub fn effective_threads(&self) -> usize {
         match self {
             ThreadConfig::Auto => {
-                let cpus = num_cpus::get();
+                // Use std::thread::available_parallelism (same as rayon default)
+                let cpus = std::thread::available_parallelism()
+                    .map(std::num::NonZeroUsize::get)
+                    .unwrap_or(1);
                 // Leave 1 core for other work, minimum 1 thread
                 (cpus.saturating_sub(1)).max(1)
             }
@@ -95,8 +98,6 @@ pub struct ParallelConfig {
     pub relationship_types: Vec<String>,
     /// Thread configuration (auto or fixed).
     pub threads: ThreadConfig,
-    /// Enable work-stealing scheduler (rayon default).
-    pub work_stealing: bool,
 }
 
 impl Default for ParallelConfig {
@@ -108,7 +109,6 @@ impl Default for ParallelConfig {
             limit: 1000,
             relationship_types: Vec::new(),
             threads: ThreadConfig::Auto,
-            work_stealing: true,
         }
     }
 }
@@ -159,13 +159,6 @@ impl ParallelConfig {
     #[must_use]
     pub fn with_fixed_threads(mut self, count: usize) -> Self {
         self.threads = ThreadConfig::Fixed(count);
-        self
-    }
-
-    /// Builder: enable/disable work stealing.
-    #[must_use]
-    pub fn with_work_stealing(mut self, enabled: bool) -> Self {
-        self.work_stealing = enabled;
         self
     }
 

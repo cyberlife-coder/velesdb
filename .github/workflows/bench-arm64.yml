@@ -27,7 +27,7 @@ jobs:
   bench-arm64:
     name: ARM64 Benchmarks
     runs-on: ubuntu-24.04-arm # GitHub ARM64 runner (larger runners)
-    if: github.repository == 'cyberlife-coder/VelesDB'
+    if: github.repository_owner == 'cyberlife-coder'
     
     steps:
       - name: Checkout repository
