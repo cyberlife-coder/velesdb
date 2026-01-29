@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **7 Critical Bugs (Devin AI Review)**
+  - **BUG-1**: MemoryPool UB - Track initialization with `HashSet` to only drop initialized slots
+  - **BUG-2**: RoaringBitmap tombstone sync - Update both `deleted_rows` and `deletion_bitmap` in `expire_rows()`
+  - **BUG-3**: Metrics underflow - CAS loop to prevent `dec_connections()` wrapping to u64::MAX
+  - **BUG-4**: Prometheus success count - Report `success = total - errors`, not total
+  - **BUG-5**: Correlated subquery false positives - Don't treat string literals as column refs
+  - **BUG-6**: IndexedDB load() - Use `IDBKeyRange.bound()` for graph prefix filtering
+  - **BUG-7**: IndexedDB delete_graph() - Delete nodes/edges with prefix, not just metadata
+
 ### 🆕 Added
 
 - **EPIC-053: WASM Graph Support** ✅ COMPLETE

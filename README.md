@@ -8,7 +8,7 @@
 
 <h3 align="center">
   🧠 <strong>The Local Knowledge Engine for AI Agents</strong> 🧠<br/>
-  <em>Vector + Graph + ColumnStore Fusion • 223µs Search • 2,765 Tests • 80% Coverage</em>
+  <em>Vector + Graph + ColumnStore Fusion • 223µs Search • 3,000 Tests • 80% Coverage</em>
 </h3>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/🏎️_Search-223_µs-blue?style=for-the-badge" alt="Search Latency"/>
-  <img src="https://img.shields.io/badge/🧪_Tests-2,765-green?style=for-the-badge" alt="Tests"/>
+  <img src="https://img.shields.io/badge/🧪_Tests-3,000-green?style=for-the-badge" alt="Tests"/>
   <img src="https://img.shields.io/badge/📊_Coverage-80.71%25-success?style=for-the-badge" alt="Coverage"/>
   <img src="https://img.shields.io/badge/🎯_Recall-100%25-success?style=for-the-badge" alt="Recall"/>
 </p>
@@ -90,8 +90,8 @@
 <table align="center">
 <tr>
 <td align="center" width="20%">
-<h3>🧪 2,765</h3>
-<p><strong>Tests</strong><br/>97.6% passing</p>
+<h3>🧪 3,000</h3>
+<p><strong>Tests</strong><br/>100% passing</p>
 </td>
 <td align="center" width="20%">
 <h3>📈 80.71%</h3>
@@ -138,7 +138,7 @@
 ```
 ✅ cargo check --workspace
 ✅ cargo clippy -- -D warnings  
-✅ cargo test --workspace (2,698 passing)
+✅ cargo test --workspace (3,000 passing)
 ✅ cargo deny check (0 advisories)
 ✅ cargo fmt --check
 ✅ Code coverage > 75% (80.71%)
