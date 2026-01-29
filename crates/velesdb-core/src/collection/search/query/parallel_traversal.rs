@@ -377,4 +377,150 @@ impl ParallelTraverser {
     }
 }
 
+/// Frontier-parallel BFS for single-start traversals (EPIC-051 US-002).
+///
+/// This implementation parallelizes each level (frontier) of the BFS,
+/// which is more efficient for traversals from a single start node
+/// with large fanout at each level.
+#[derive(Debug, Default)]
+pub struct FrontierParallelBFS {
+    config: ParallelConfig,
+}
+
+impl FrontierParallelBFS {
+    /// Creates a new frontier-parallel BFS traverser.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates with custom configuration.
+    #[must_use]
+    pub fn with_config(config: ParallelConfig) -> Self {
+        Self { config }
+    }
+
+    /// Performs frontier-parallel BFS from a single start node.
+    ///
+    /// Each BFS level is expanded in parallel using rayon.
+    /// Uses a thread-safe visited set (DashSet-like behavior via atomic).
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Starting node ID
+    /// * `get_neighbors` - Function returning (neighbor_id, edge_id) pairs
+    ///
+    /// # Returns
+    ///
+    /// Traversal results and statistics.
+    pub fn traverse<F>(
+        &self,
+        start: u64,
+        get_neighbors: F,
+    ) -> (Vec<TraversalResult>, TraversalStats)
+    where
+        F: Fn(u64) -> Vec<(u64, u64)> + Sync,
+    {
+        use parking_lot::RwLock;
+        use std::collections::HashSet;
+
+        let stats = TraversalStats::new();
+        stats.add_nodes_visited(1);
+
+        // Thread-safe visited set using RwLock
+        let visited: RwLock<HashSet<u64>> = RwLock::new(HashSet::new());
+        visited.write().insert(start);
+
+        let mut all_results: Vec<TraversalResult> = Vec::new();
+        all_results.push(TraversalResult::new(start, start, Vec::new(), 0));
+
+        // Current frontier: (node_id, path_to_node)
+        let mut current_frontier: Vec<(u64, Vec<u64>)> = vec![(start, Vec::new())];
+        let mut depth: u32 = 0;
+
+        while !current_frontier.is_empty() && depth < self.config.max_depth {
+            depth += 1;
+
+            // Parallel expansion of frontier
+            let next_frontier: Vec<(u64, Vec<u64>, u64)> =
+                if current_frontier.len() >= self.config.parallel_threshold {
+                    current_frontier
+                        .par_iter()
+                        .flat_map(|(node, path)| {
+                            let neighbors = get_neighbors(*node);
+                            stats.add_edges_traversed(neighbors.len());
+
+                            neighbors
+                                .into_iter()
+                                .filter_map(|(neighbor, edge_id)| {
+                                    // Check and insert atomically
+                                    let mut visited_guard = visited.write();
+                                    if visited_guard.insert(neighbor) {
+                                        stats.add_nodes_visited(1);
+                                        let mut new_path = path.clone();
+                                        new_path.push(edge_id);
+                                        Some((neighbor, new_path, edge_id))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect()
+                } else {
+                    // Sequential for small frontiers
+                    current_frontier
+                        .iter()
+                        .flat_map(|(node, path)| {
+                            let neighbors = get_neighbors(*node);
+                            stats.add_edges_traversed(neighbors.len());
+
+                            neighbors
+                                .into_iter()
+                                .filter_map(|(neighbor, edge_id)| {
+                                    let mut visited_guard = visited.write();
+                                    if visited_guard.insert(neighbor) {
+                                        stats.add_nodes_visited(1);
+                                        let mut new_path = path.clone();
+                                        new_path.push(edge_id);
+                                        Some((neighbor, new_path, edge_id))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect()
+                };
+
+            // Add results from this level
+            for (neighbor, path, _) in &next_frontier {
+                all_results.push(TraversalResult::new(start, *neighbor, path.clone(), depth));
+
+                // Early exit if limit reached
+                if all_results.len() >= self.config.limit {
+                    let mut final_stats = TraversalStats::new();
+                    final_stats.start_nodes_count = 1;
+                    final_stats.raw_results = all_results.len();
+                    final_stats.deduplicated_results = all_results.len();
+                    return (all_results, final_stats);
+                }
+            }
+
+            // Update frontier for next level
+            current_frontier = next_frontier
+                .into_iter()
+                .map(|(node, path, _)| (node, path))
+                .collect();
+        }
+
+        let mut final_stats = TraversalStats::new();
+        final_stats.start_nodes_count = 1;
+        final_stats.raw_results = all_results.len();
+        final_stats.deduplicated_results = all_results.len();
+
+        (all_results, final_stats)
+    }
+}
+
 // Tests moved to parallel_traversal_tests.rs per project rules

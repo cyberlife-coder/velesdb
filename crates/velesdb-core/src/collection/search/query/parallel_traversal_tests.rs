@@ -186,3 +186,100 @@ fn test_result_limit() {
 
     assert!(results.len() <= 3);
 }
+
+// ============================================================================
+// EPIC-051 US-002: FrontierParallelBFS Tests
+// ============================================================================
+
+#[test]
+fn test_frontier_parallel_bfs_basic() {
+    let graph = create_test_graph();
+    let bfs = FrontierParallelBFS::new();
+
+    let get_neighbors =
+        |node: u64| -> Vec<(u64, u64)> { graph.get(&node).cloned().unwrap_or_default() };
+
+    let (results, stats) = bfs.traverse(1, get_neighbors);
+
+    // Should visit all reachable nodes: 1, 2, 3, 4, 5, 6
+    assert!(results.len() >= 6);
+    assert_eq!(stats.start_nodes_count, 1);
+}
+
+#[test]
+fn test_frontier_parallel_bfs_no_duplicates() {
+    let graph = create_test_graph();
+    let bfs = FrontierParallelBFS::new();
+
+    let get_neighbors =
+        |node: u64| -> Vec<(u64, u64)> { graph.get(&node).cloned().unwrap_or_default() };
+
+    let (results, _) = bfs.traverse(1, get_neighbors);
+
+    // Check no duplicate end nodes
+    let mut seen_ends: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for result in &results {
+        assert!(
+            seen_ends.insert(result.end_node),
+            "Duplicate end node: {}",
+            result.end_node
+        );
+    }
+}
+
+#[test]
+fn test_frontier_parallel_bfs_depth_order() {
+    let graph = create_test_graph();
+    let bfs = FrontierParallelBFS::new();
+
+    let get_neighbors =
+        |node: u64| -> Vec<(u64, u64)> { graph.get(&node).cloned().unwrap_or_default() };
+
+    let (results, _) = bfs.traverse(1, get_neighbors);
+
+    // Verify results are ordered by depth (BFS property)
+    let mut last_depth = 0;
+    for result in &results {
+        assert!(
+            result.depth >= last_depth || result.depth == 0,
+            "Results not in BFS order"
+        );
+        last_depth = result.depth;
+    }
+}
+
+#[test]
+fn test_frontier_parallel_bfs_with_limit() {
+    let bfs = FrontierParallelBFS::with_config(ParallelConfig {
+        max_depth: 10,
+        parallel_threshold: 1,
+        limit: 3,
+        relationship_types: vec![],
+    });
+
+    let get_neighbors = |node: u64| -> Vec<(u64, u64)> {
+        if node < 100 {
+            vec![(node + 1, node * 10), (node + 2, node * 10 + 1)]
+        } else {
+            vec![]
+        }
+    };
+
+    let (results, _) = bfs.traverse(1, get_neighbors);
+
+    assert!(results.len() <= 3);
+}
+
+#[test]
+fn test_frontier_parallel_bfs_empty_graph() {
+    let bfs = FrontierParallelBFS::new();
+
+    let get_neighbors = |_node: u64| -> Vec<(u64, u64)> { vec![] };
+
+    let (results, stats) = bfs.traverse(1, get_neighbors);
+
+    // Only start node should be in results
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].end_node, 1);
+    assert_eq!(stats.start_nodes_count, 1);
+}
