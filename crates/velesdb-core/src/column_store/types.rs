@@ -182,3 +182,65 @@ pub struct BatchUpsertResult {
     /// List of failed operations with their errors.
     pub failed: Vec<(i64, ColumnStoreError)>,
 }
+
+// =============================================================================
+// EPIC-043 US-001: Vacuum Types
+// =============================================================================
+
+/// Configuration for vacuum operation.
+#[derive(Debug, Clone)]
+pub struct VacuumConfig {
+    /// Process tombstones in batches of this size.
+    pub batch_size: usize,
+    /// Sync to disk after vacuum.
+    pub sync: bool,
+    /// Yield interval for cooperative multitasking (0 = no yielding).
+    pub yield_interval_ms: u64,
+}
+
+impl Default for VacuumConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: 10_000,
+            sync: true,
+            yield_interval_ms: 0,
+        }
+    }
+}
+
+impl VacuumConfig {
+    /// Creates a new vacuum config with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Builder: set batch size.
+    #[must_use]
+    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
+    }
+
+    /// Builder: set sync option.
+    #[must_use]
+    pub fn with_sync(mut self, sync: bool) -> Self {
+        self.sync = sync;
+        self
+    }
+}
+
+/// Statistics from a vacuum operation.
+#[derive(Debug, Default, Clone)]
+pub struct VacuumStats {
+    /// Number of tombstones found.
+    pub tombstones_found: usize,
+    /// Number of tombstones removed.
+    pub tombstones_removed: usize,
+    /// Bytes reclaimed (estimated).
+    pub bytes_reclaimed: u64,
+    /// Duration of the vacuum operation in milliseconds.
+    pub duration_ms: u64,
+    /// Whether vacuum completed successfully.
+    pub completed: bool,
+}
