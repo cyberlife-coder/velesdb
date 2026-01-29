@@ -87,19 +87,16 @@ pub fn prefetch_vector(vector: &[f32]) {
         }
     }
 
-    // ARM64 prefetch: blocked on rust-lang/rust#117217 (stdarch_aarch64_prefetch)
-    // When stabilized, uncomment the following:
-    // #[cfg(target_arch = "aarch64")]
-    // {
-    //     unsafe {
-    //         use std::arch::aarch64::_prefetch;
-    //         _prefetch(vector.as_ptr().cast::<i8>(), _PREFETCH_READ, _PREFETCH_LOCALITY3);
-    //     }
-    // }
-
-    #[cfg(not(target_arch = "x86_64"))]
+    // ARM64 prefetch: uses inline ASM workaround (EPIC-054 US-002)
+    // Bypasses rust-lang/rust#117217 (stdarch_aarch64_prefetch unstable)
+    #[cfg(target_arch = "aarch64")]
     {
-        // No-op for ARM64 (until stabilization) and other architectures
+        crate::simd_neon_prefetch::prefetch_vector_neon(vector);
+    }
+
+    // No-op for architectures without prefetch support
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
         let _ = vector;
     }
 }
