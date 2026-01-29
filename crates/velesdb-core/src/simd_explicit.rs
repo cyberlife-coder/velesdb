@@ -406,7 +406,10 @@ pub fn jaccard_similarity_simd(a: &[f32], b: &[f32]) -> f32 {
     let union = union0 + union1;
 
     if union == 0 {
-        return 1.0; // Empty sets are identical
+        // Design: Empty sets are mathematically identical (J(∅,∅) = 1.0)
+        // This follows the standard convention in set theory where two empty sets
+        // have maximum similarity. Alternative: return 0.0 for "no overlap".
+        return 1.0;
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -463,6 +466,7 @@ pub fn jaccard_similarity_binary(a: &[u64], b: &[u64]) -> f32 {
     let union = union0 + union1;
 
     if union == 0 {
+        // Design: Empty sets are mathematically identical (J(∅,∅) = 1.0)
         return 1.0;
     }
 
@@ -489,18 +493,32 @@ pub fn jaccard_similarity_binary(a: &[u64], b: &[u64]) -> f32 {
 #[inline]
 #[must_use]
 pub fn batch_dot_product(queries: &[&[f32]], vectors: &[&[f32]]) -> Vec<Vec<f32>> {
-    if queries.is_empty() || vectors.is_empty() {
-        return vec![vec![]; queries.len()];
+    // Early return for empty inputs - return appropriately sized empty result
+    if queries.is_empty() {
+        return Vec::new();
+    }
+    if vectors.is_empty() {
+        return vec![Vec::new(); queries.len()];
     }
 
     let dim = queries[0].len();
 
-    // Validate dimensions
-    for q in queries {
-        assert_eq!(q.len(), dim, "Query dimension mismatch");
+    // Validate dimensions upfront with clear error messages (EPIC-073 review fix)
+    for (i, q) in queries.iter().enumerate() {
+        assert_eq!(
+            q.len(),
+            dim,
+            "Query {i} dimension mismatch: expected {dim}, got {}",
+            q.len()
+        );
     }
-    for v in vectors {
-        assert_eq!(v.len(), dim, "Vector dimension mismatch");
+    for (i, v) in vectors.iter().enumerate() {
+        assert_eq!(
+            v.len(),
+            dim,
+            "Vector {i} dimension mismatch: expected {dim}, got {}",
+            v.len()
+        );
     }
 
     // Pre-allocate result matrix
@@ -532,6 +550,10 @@ pub fn batch_dot_product(queries: &[&[f32]], vectors: &[&[f32]]) -> Vec<Vec<f32>
 /// # Returns
 ///
 /// Vec of (vector_id, score) tuples for each query, sorted by relevance.
+///
+/// # Panics
+///
+/// Panics if any query or vector dimension doesn't match the first query's dimension.
 #[inline]
 #[must_use]
 pub fn batch_similarity_top_k(
@@ -542,6 +564,25 @@ pub fn batch_similarity_top_k(
 ) -> Vec<Vec<(u64, f32)>> {
     if queries.is_empty() || vectors.is_empty() || top_k == 0 {
         return vec![vec![]; queries.len()];
+    }
+
+    // Validate dimensions upfront (EPIC-073 review fix)
+    let dim = queries[0].len();
+    for (i, q) in queries.iter().enumerate() {
+        assert_eq!(
+            q.len(),
+            dim,
+            "Query {i} dimension mismatch: expected {dim}, got {}",
+            q.len()
+        );
+    }
+    for (id, v) in vectors {
+        assert_eq!(
+            v.len(),
+            dim,
+            "Vector {id} dimension mismatch: expected {dim}, got {}",
+            v.len()
+        );
     }
 
     let mut results = Vec::with_capacity(queries.len());
