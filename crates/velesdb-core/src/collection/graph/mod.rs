@@ -35,6 +35,7 @@
 //! let flexible_schema = GraphSchema::schemaless();
 //! ```
 
+mod cart;
 mod clustered_index;
 mod degree_router;
 mod edge;
@@ -68,6 +69,7 @@ mod range_index_tests;
 #[cfg(test)]
 mod schema_tests;
 
+pub use cart::{CARTEdgeIndex, CompressedART};
 pub use clustered_index::{ClusteredEdgeIndex, ClusteredIndex};
 pub use degree_router::{
     DegreeAdaptiveStorage, DegreeRouter, EdgeIndex, HashSetEdgeIndex, VecEdgeIndex,

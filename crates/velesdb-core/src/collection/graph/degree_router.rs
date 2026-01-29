@@ -21,8 +21,13 @@
 
 use std::collections::HashSet;
 
+use super::cart::CARTEdgeIndex;
+
 /// Default threshold for switching from low-degree to high-degree storage.
 pub const DEFAULT_DEGREE_THRESHOLD: usize = 100;
+
+/// Threshold for switching from HashSet to C-ART (very high-degree hubs).
+pub const CART_THRESHOLD: usize = 1000;
 
 /// Trait for edge index implementations.
 ///
@@ -172,10 +177,12 @@ impl EdgeIndex for HashSetEdgeIndex {
 /// Storage variant for degree-adaptive storage.
 #[derive(Debug, Clone)]
 pub enum DegreeAdaptiveStorage {
-    /// Low-degree storage (Vec-based)
+    /// Low-degree storage (Vec-based, < 100 edges)
     LowDegree(VecEdgeIndex),
-    /// High-degree storage (HashSet-based)
+    /// High-degree storage (HashSet-based, 100-1000 edges)
     HighDegree(HashSetEdgeIndex),
+    /// Very high-degree storage (C-ART, > 1000 edges - hub nodes)
+    VeryHighDegree(CARTEdgeIndex),
 }
 
 impl Default for DegreeAdaptiveStorage {
@@ -191,16 +198,30 @@ impl DegreeAdaptiveStorage {
         Self::default()
     }
 
-    /// Returns true if this is high-degree storage.
+    /// Returns true if this is high-degree storage (HashSet or C-ART).
     #[must_use]
     pub fn is_high_degree(&self) -> bool {
-        matches!(self, Self::HighDegree(_))
+        matches!(self, Self::HighDegree(_) | Self::VeryHighDegree(_))
+    }
+
+    /// Returns true if this is very high-degree storage (C-ART).
+    #[must_use]
+    pub fn is_very_high_degree(&self) -> bool {
+        matches!(self, Self::VeryHighDegree(_))
     }
 
     /// Promotes to high-degree storage if currently low-degree.
     pub fn promote_to_high_degree(&mut self) {
         if let Self::LowDegree(vec_index) = self {
             *self = Self::HighDegree(HashSetEdgeIndex::from_vec(vec_index));
+        }
+    }
+
+    /// Promotes to very high-degree C-ART storage if currently HashSet.
+    pub fn promote_to_cart(&mut self) {
+        if let Self::HighDegree(hash_index) = self {
+            let targets: Vec<u64> = hash_index.targets.iter().copied().collect();
+            *self = Self::VeryHighDegree(CARTEdgeIndex::from_targets(&targets));
         }
     }
 }
@@ -210,6 +231,7 @@ impl EdgeIndex for DegreeAdaptiveStorage {
         match self {
             Self::LowDegree(vec) => vec.insert(target),
             Self::HighDegree(hash) => hash.insert(target),
+            Self::VeryHighDegree(cart) => cart.insert(target),
         }
     }
 
@@ -217,6 +239,7 @@ impl EdgeIndex for DegreeAdaptiveStorage {
         match self {
             Self::LowDegree(vec) => vec.remove(target),
             Self::HighDegree(hash) => hash.remove(target),
+            Self::VeryHighDegree(cart) => cart.remove(target),
         }
     }
 
@@ -224,6 +247,7 @@ impl EdgeIndex for DegreeAdaptiveStorage {
         match self {
             Self::LowDegree(vec) => vec.contains(target),
             Self::HighDegree(hash) => hash.contains(target),
+            Self::VeryHighDegree(cart) => cart.contains(target),
         }
     }
 
@@ -231,6 +255,7 @@ impl EdgeIndex for DegreeAdaptiveStorage {
         match self {
             Self::LowDegree(vec) => vec.targets(),
             Self::HighDegree(hash) => hash.targets(),
+            Self::VeryHighDegree(cart) => cart.targets(),
         }
     }
 
@@ -238,6 +263,7 @@ impl EdgeIndex for DegreeAdaptiveStorage {
         match self {
             Self::LowDegree(vec) => vec.len(),
             Self::HighDegree(hash) => hash.len(),
+            Self::VeryHighDegree(cart) => cart.len(),
         }
     }
 }
@@ -271,12 +297,22 @@ impl DegreeRouter {
     }
 
     /// Inserts a target, potentially triggering promotion to high-degree storage.
+    ///
+    /// Promotion thresholds:
+    /// - Vec → HashSet: when len > DEFAULT_DEGREE_THRESHOLD (100)
+    /// - HashSet → C-ART: when len > CART_THRESHOLD (1000)
     pub fn insert(&mut self, target: u64) {
         self.storage.insert(target);
 
-        // Check for promotion
+        // Check for promotion to HashSet
         if !self.storage.is_high_degree() && self.storage.len() > self.threshold {
             self.storage.promote_to_high_degree();
+            self.promotions += 1;
+        }
+
+        // Check for promotion to C-ART (for very high-degree hubs)
+        if !self.storage.is_very_high_degree() && self.storage.len() > CART_THRESHOLD {
+            self.storage.promote_to_cart();
             self.promotions += 1;
         }
     }
@@ -461,5 +497,55 @@ mod tests {
     fn test_degree_router_default_threshold() {
         let router = DegreeRouter::new();
         assert_eq!(router.threshold(), DEFAULT_DEGREE_THRESHOLD);
+    }
+
+    #[test]
+    fn test_degree_router_cart_promotion() {
+        let mut router = DegreeRouter::with_threshold(10);
+
+        // Insert enough to trigger Vec -> HashSet -> C-ART
+        for i in 0..1002 {
+            router.insert(i);
+        }
+
+        // Should have promoted twice: Vec->HashSet and HashSet->C-ART
+        assert!(router.storage.is_very_high_degree());
+        assert_eq!(router.promotion_count(), 2);
+        assert_eq!(router.len(), 1002);
+
+        // Verify all values still accessible
+        for i in 0..1002 {
+            assert!(router.contains(i), "Missing value: {i}");
+        }
+    }
+
+    #[test]
+    fn test_degree_adaptive_storage_cart_promotion() {
+        let mut storage = DegreeAdaptiveStorage::new();
+
+        // Fill with data
+        for i in 0..500 {
+            storage.insert(i);
+        }
+
+        // Promote to HashSet
+        storage.promote_to_high_degree();
+        assert!(storage.is_high_degree());
+        assert!(!storage.is_very_high_degree());
+
+        // Add more data
+        for i in 500..1000 {
+            storage.insert(i);
+        }
+
+        // Promote to C-ART
+        storage.promote_to_cart();
+        assert!(storage.is_very_high_degree());
+        assert_eq!(storage.len(), 1000);
+
+        // Verify data integrity
+        for i in 0..1000 {
+            assert!(storage.contains(i));
+        }
     }
 }
