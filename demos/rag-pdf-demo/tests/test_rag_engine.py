@@ -67,7 +67,7 @@ class TestRAGEngine:
             results = await engine.search("What is machine learning?", top_k=5)
             
             assert len(results) > 0
-            assert results[0]["score"] == 0.95
+            assert abs(results[0]["score"] - 0.95) < 1e-6
             assert "Machine learning" in results[0]["text"]
 
     @pytest.mark.asyncio
