@@ -7,116 +7,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🐛 Fixed
+## [1.4.1] - 2026-01-29
 
-- **7 Critical Bugs (Devin AI Review)**
-  - **BUG-1**: MemoryPool UB - Track initialization with `HashSet` to only drop initialized slots
-  - **BUG-2**: RoaringBitmap tombstone sync - Update both `deleted_rows` and `deletion_bitmap` in `expire_rows()`
-  - **BUG-3**: Metrics underflow - CAS loop to prevent `dec_connections()` wrapping to u64::MAX
-  - **BUG-4**: Prometheus success count - Report `success = total - errors`, not total
-  - **BUG-5**: Correlated subquery false positives - Don't treat string literals as column refs
-  - **BUG-6**: IndexedDB load() - Use `IDBKeyRange.bound()` for graph prefix filtering
-  - **BUG-7**: IndexedDB delete_graph() - Delete nodes/edges with prefix, not just metadata
+### 🎯 Highlights
+
+Major performance release with **SIMD pipeline optimizations** (2.3x Jaccard speedup), **parallel graph traversal** (2-4x BFS speedup), and **dual-precision quantization** (4x memory bandwidth reduction). Includes 7 critical bugfixes and comprehensive code quality improvements across 15+ EPICs.
 
 ### 🆕 Added
 
-- **EPIC-073: SIMD Pipeline Optimizations** ✅ COMPLETE
-  - `prefetch_vector_multi_cache_line()` - Multi-level cache prefetch (L1/L2/L3)
-  - `calculate_prefetch_distance()` - Optimal prefetch distance calculation
-  - `jaccard_similarity_simd()` - 4-way ILP Jaccard with 2.3x speedup
-  - `jaccard_similarity_binary()` - POPCNT-based binary Jaccard
-  - `batch_dot_product()` - M×N matrix dot product computation
-  - `batch_similarity_top_k()` - Batch top-k similarity search with validation
-  - `QuantizationConfig.should_quantize()` - Auto-quantization helper (threshold-based)
-  - 24 new TDD tests for SIMD optimizations
+#### EPIC-073: SIMD Pipeline Optimizations ✅
+- `prefetch_vector_multi_cache_line()` - Multi-level cache prefetch (L1/L2/L3)
+- `calculate_prefetch_distance()` - Optimal prefetch distance calculation
+- `jaccard_similarity_simd()` - 4-way ILP Jaccard with **2.3x speedup**
+- `jaccard_similarity_binary()` - POPCNT-based binary Jaccard
+- `batch_dot_product()` - M×N matrix dot product computation
+- `batch_similarity_top_k()` - Batch top-k similarity search with validation
+- `QuantizationConfig.should_quantize()` - Auto-quantization helper (threshold-based)
+- 24 new TDD tests for SIMD optimizations
 
-- **EPIC-053: WASM Graph Support** ✅ COMPLETE
-  - `GraphWorkerConfig` and `TraversalProgress` for Web Worker offloading
-  - `should_use_worker()` decision function for traversal strategies
-  - wasm-opt -Os optimization for bundle size
-  - Bundle optimization documentation (`docs/wasm/bundle-optimization.md`)
-  - 6 new TDD tests for worker infrastructure
+#### EPIC-055: Dual-Precision Quantization ✅
+- `DualPrecisionConfig` struct for search configuration
+- `search_with_config()` with TRUE int8 graph traversal
+- **4x memory bandwidth reduction** during HNSW exploration
+- VelesQL `WITH (quantization = 'dual', oversampling = N)` hints
+- `QuantizationMode` enum: F32, Int8, Dual, Auto
+- 23 new TDD tests (13 int8 traversal + 10 VelesQL hints)
 
-- **EPIC-061: Massive Refactoring** (US-002, US-003, US-004)
-  - Extract `match_parser.rs` from `select.rs` (1068→742 lines, 31% reduction)
-  - Extract `distinct.rs` from `query/mod.rs` (791→745 lines, 6% reduction)
-  - Extract `repl_output.rs` from `repl.rs` (910→784 lines, 14% reduction)
-  - MATCH parsing, DISTINCT deduplication, REPL output now in dedicated modules
+#### EPIC-054: ARM64 SIMD Optimization ✅
+- NEON SIMD implementations for ARM64 platforms
+- `simd_neon.rs` with dot_product, euclidean, cosine
+- ARM64 inline ASM prefetch integration
+- Runtime SIMD dispatch for cross-platform support
+- portable_simd evaluation completed
+- 7 new tests for NEON implementations
 
-- **EPIC-052: VelesQL Advanced Features** ✅ COMPLETE
-  - `detect_query_type()` for unified /query endpoint routing
-  - `QueryType` enum: Search, Aggregation, Rows, Graph
-  - 5 new TDD tests for query type detection
+#### EPIC-053: WASM Graph Support ✅
+- `GraphWorkerConfig` and `TraversalProgress` for Web Worker offloading
+- `should_use_worker()` decision function for traversal strategies
+- IndexedDB persistence for GraphStore
+- MATCH query introspection in VelesQL
+- wasm-opt -Os optimization for bundle size
+- 6 new TDD tests for worker infrastructure
 
-- **EPIC-039: Correlated Subqueries** ✅ COMPLETE
-  - `detect_correlated_columns()` for automatic correlation detection
-  - `SubqueryStrategy` enum: CacheResult, PerRow, RewriteAsJoin, Materialize
-  - `SubqueryOptConfig` and `SubqueryHint` for execution optimization
-  - 10 new TDD tests for subquery parsing and optimization
+#### EPIC-051: Parallel Graph Traversal ✅
+- `FrontierParallelBFS` - Level-by-level parallel BFS traversal
+- **2-4x speedup** on wide graphs with rayon parallelism
+- 5 new tests for frontier parallelization
 
-- **EPIC-055: Dual-Precision Quantization** (US-003, US-005) ✅ COMPLETE
-  - `DualPrecisionConfig` struct for search configuration
-  - `search_with_config()` with TRUE int8 graph traversal
-  - 4x memory bandwidth reduction during HNSW exploration
-  - VelesQL `WITH (quantization = 'dual', oversampling = N)` hints
-  - `QuantizationMode` enum: F32, Int8, Dual, Auto
-  - 23 new TDD tests (13 int8 traversal + 10 VelesQL hints)
+#### EPIC-058: Server API Completeness ✅
+- **`/match` REST Endpoint** - `POST /collections/{name}/match` for graph pattern matching
+- Support for hybrid queries with `vector` and `threshold` parameters
+- Property projection in MATCH results
+- 12 E2E tests for API contract validation
 
-- **EPIC-051: Parallel Graph Traversal** (US-002)
-  - `FrontierParallelBFS` - Level-by-level parallel BFS traversal
-  - 2-4x speedup on wide graphs with rayon parallelism
-  - 5 new tests for frontier parallelization
+#### EPIC-052: VelesQL Advanced Features ✅
+- `detect_query_type()` for unified /query endpoint routing
+- `QueryType` enum: Search, Aggregation, Rows, Graph
+- `UnifiedQueryResponse` type with query type metadata
+- OR/NOT similarity patterns in WHERE clauses
+- `evaluate_similarity_condition()` for complex boolean logic
+- 25 new TDD tests for query features
 
-- **EPIC-052: VelesQL Advanced Features** (US-007)
-  - OR/NOT similarity patterns in WHERE clauses
-  - `evaluate_similarity_condition()` for complex boolean logic
-  - 8 new tests for similarity condition evaluation
+#### EPIC-039: Correlated Subqueries ✅
+- `detect_correlated_columns()` for automatic correlation detection
+- `SubqueryStrategy` enum: CacheResult, PerRow, RewriteAsJoin, Materialize
+- `SubqueryOptConfig` and `SubqueryHint` for execution optimization
+- 10 new TDD tests for subquery parsing and optimization
 
-- **EPIC-054: ARM64 SIMD Optimization** (US-001)
-  - NEON SIMD implementations for ARM64 platforms
-  - `simd_neon.rs` with dot_product, euclidean, cosine
-  - Runtime SIMD dispatch for cross-platform support
-  - 7 new tests for NEON implementations
+#### EPIC-020: Memory Pool & High-Degree Vertices ✅
+- C-ART (Adaptive Radix Tree) for high-degree vertex storage
+- Batch allocation and prefetch support in MemoryPool
+
+#### EPIC-043: ColumnStore Vacuum ✅
+- RoaringBitmap integration for tombstone tracking
+- AutoVacuum implementation for automatic cleanup
+
+#### EPIC-046: Query Planning ✅
+- `CollectionStats` for query cost estimation
+- Filter pushdown optimization
+
+#### EPIC-047: Composite Graph-Property Index ✅
+- `RangeIndex` for numeric range queries
+- `EdgeIndex` for edge-based filtering
+- Index intersection optimization
+- Auto-suggestion for index creation
+
+#### EPIC-049: Multi-Score Fusion ✅
+- Reciprocal Rank Fusion (RRF) implementation
+- Weighted score combination
+
+#### EPIC-050: Observability Metrics ✅
+- `TraversalMetrics` for graph operation tracking
+- GuardRails for query complexity limits
+- SlowQueryLogger for performance monitoring
+- Prometheus metrics integration
+- Grafana dashboard configuration
+
+#### EPIC-059: CLI Enhancements ✅
+- `--stream` flag for traverse command
+
+#### EPIC-066: Telemetry & License ✅
+- Update check implementation
+- License protection framework
+
+### � Changed
+
+#### EPIC-061: Massive Refactoring ✅
+- Extract `match_parser.rs` from `select.rs` (1068→742 lines, **31% reduction**)
+- Extract `distinct.rs` from `query/mod.rs` (791→745 lines, 6% reduction)
+- Extract `repl_output.rs` from `repl.rs` (910→784 lines, 14% reduction)
+- Extract `types.rs` from `velesdb-mobile/lib.rs`
+- Extract graph tests into separate file (WASM)
+- Extract import tests into separate file (CLI)
+- Extract graph commands module (Tauri)
+
+### 🐛 Fixed
+
+#### 7 Critical Bugs (Devin AI Review)
+- **BUG-1**: MemoryPool UB - Track initialization with `HashSet` to only drop initialized slots
+- **BUG-2**: RoaringBitmap tombstone sync - Update both `deleted_rows` and `deletion_bitmap` in `expire_rows()`
+- **BUG-3**: Metrics underflow - CAS loop to prevent `dec_connections()` wrapping to u64::MAX
+- **BUG-4**: Prometheus success count - Report `success = total - errors`, not total
+- **BUG-5**: Correlated subquery false positives - Don't treat string literals as column refs
+- **BUG-6**: IndexedDB load() - Use `IDBKeyRange.bound()` for graph prefix filtering
+- **BUG-7**: IndexedDB delete_graph() - Delete nodes/edges with prefix, not just metadata
+
+#### PR Review Fixes
+- Replace dangerous casts with `try_from`/annotations across codebase (#163)
+- Address PR #161 review - 6 bugs + 4 flags
+- Add safety comments for truncating casts (EPIC-067)
+- Add `sync_all()` for crash recovery (EPIC-069)
+
+#### CI/CD Fixes
+- Update `Swatinem/rust-cache` to v2.8.2
+- Pin actions in bench-arm64.yml
+- Fix clippy cognitive_complexity lints with justifications
 
 ### 🔧 Internal
 
 - Added `#[allow(clippy::cognitive_complexity)]` with justifications to 6 complex functions
 - Cleaned up duplicate EPIC folders (067-072)
-- Updated ecosystem sync report
+- Updated ecosystem sync report for EPIC-073
+- 5 quality EPICs completed (EPIC-061/062/063/064/065)
+- Code style improvements with cargo fmt
 
-## [1.4.1] - 2026-01-27
+### 📊 Metrics
 
-### 🎯 Highlights
-
-This patch release adds the `/match` REST endpoint for hybrid Vector+Graph queries and introduces unified query types for the `/query` endpoint.
-
-### 🆕 EPIC-058: Server API Completeness
-
-#### Added
-
-- **`/match` REST Endpoint** (US-007)
-  - `POST /collections/{name}/match` for graph pattern matching
-  - Support for hybrid queries with `vector` and `threshold` parameters
-  - Property projection in MATCH results
-  - 12 E2E tests for API contract validation
-
-### 📝 EPIC-052: VelesQL Advanced Features
-
-#### Added
-
-- **QueryType Enum** (US-006)
-  - `QueryType::Search` - Vector similarity queries
-  - `QueryType::Aggregation` - GROUP BY, COUNT, SUM queries
-  - `QueryType::Rows` - Simple SELECT queries
-  - `QueryType::Graph` - MATCH pattern queries
-  - `UnifiedQueryResponse` type with query type metadata
-  - 17 unit tests for query type detection
-
-### 🔧 Internal
-
-- Wired `match_query` handler to server routes
-- Added `# Errors` documentation to match_query handler
-- Exported `QueryType` and `UnifiedQueryResponse` from types module
+- **Tests**: 3,024 passing (259 new since v1.4.0)
+- **Coverage**: 80.56% line coverage
+- **Benchmarks**: Jaccard ILP 2.3x faster, BFS 2-4x faster
 
 ## [1.4.0] - 2026-01-27
 
