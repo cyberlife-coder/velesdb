@@ -506,8 +506,24 @@ impl OperationalMetrics {
     }
 
     /// Decrements active connections.
+    ///
+    /// Uses a CAS loop to saturate at 0, preventing underflow wrap to u64::MAX.
     pub fn dec_connections(&self) {
-        self.active_connections.fetch_sub(1, Ordering::Relaxed);
+        // BUG-3 FIX: Use CAS loop to prevent underflow
+        loop {
+            let current = self.active_connections.load(Ordering::Relaxed);
+            if current == 0 {
+                return; // Already at 0, don't underflow
+            }
+            if self
+                .active_connections
+                .compare_exchange_weak(current, current - 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return;
+            }
+            // CAS failed, retry
+        }
     }
 
     /// Exports metrics in Prometheus text format.
@@ -517,17 +533,22 @@ impl OperationalMetrics {
         let mut output = String::new();
 
         // Queries total
+        // BUG-4 FIX: success = total - errors, not total (which includes errors)
+        let total = self.queries_total.load(Ordering::Relaxed);
+        let errors = self.query_errors.load(Ordering::Relaxed);
+        let success = total.saturating_sub(errors);
+
         output.push_str("# HELP velesdb_queries_total Total number of queries executed\n");
         output.push_str("# TYPE velesdb_queries_total counter\n");
         let _ = writeln!(
             output,
             "velesdb_queries_total{{status=\"success\"}} {}",
-            self.queries_total.load(Ordering::Relaxed)
+            success
         );
         let _ = writeln!(
             output,
             "velesdb_queries_total{{status=\"error\"}} {}\n",
-            self.query_errors.load(Ordering::Relaxed)
+            errors
         );
 
         // Query types
