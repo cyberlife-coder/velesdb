@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🆕 Added
 
+- **EPIC-055: Dual-Precision Quantization** (US-003, US-005) ✅ COMPLETE
+  - `DualPrecisionConfig` struct for search configuration
+  - `search_with_config()` with TRUE int8 graph traversal
+  - 4x memory bandwidth reduction during HNSW exploration
+  - VelesQL `WITH (quantization = 'dual', oversampling = N)` hints
+  - `QuantizationMode` enum: F32, Int8, Dual, Auto
+  - 23 new TDD tests (13 int8 traversal + 10 VelesQL hints)
+
 - **EPIC-051: Parallel Graph Traversal** (US-002)
   - `FrontierParallelBFS` - Level-by-level parallel BFS traversal
   - 2-4x speedup on wide graphs with rayon parallelism
