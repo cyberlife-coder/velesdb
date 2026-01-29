@@ -20,6 +20,7 @@
 //! - Memory: Pre-allocated chunks reduce fragmentation
 
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -33,6 +34,9 @@ const DEFAULT_CHUNK_SIZE: usize = 1024;
 pub struct MemoryPool<T> {
     chunks: Vec<Box<[MaybeUninit<T>]>>,
     free_indices: Vec<usize>,
+    /// Tracks which slots have been initialized via `store()`.
+    /// Only initialized slots should be dropped.
+    initialized: HashSet<usize>,
     chunk_size: usize,
     total_allocated: usize,
 }
@@ -44,6 +48,7 @@ impl<T> MemoryPool<T> {
         Self {
             chunks: Vec::new(),
             free_indices: Vec::new(),
+            initialized: HashSet::new(),
             chunk_size: chunk_size.max(1),
             total_allocated: 0,
         }
@@ -76,8 +81,16 @@ impl<T> MemoryPool<T> {
     /// The index must have been obtained from `allocate()` and not yet deallocated.
     pub fn store(&mut self, index: PoolIndex, value: T) {
         let (chunk_idx, slot_idx) = self.index_to_chunk_slot(index.0);
+        // If already initialized, drop the old value first
+        if self.initialized.contains(&index.0) {
+            // SAFETY: Slot was previously initialized
+            unsafe {
+                std::ptr::drop_in_place(self.chunks[chunk_idx][slot_idx].as_mut_ptr());
+            }
+        }
         // SAFETY: We only store to indices obtained from allocate()
         self.chunks[chunk_idx][slot_idx].write(value);
+        self.initialized.insert(index.0);
     }
 
     /// Gets a reference to the value at the given index.
@@ -106,9 +119,12 @@ impl<T> MemoryPool<T> {
     pub fn deallocate(&mut self, index: PoolIndex) {
         let (chunk_idx, slot_idx) = self.index_to_chunk_slot(index.0);
         if chunk_idx < self.chunks.len() {
-            // SAFETY: Caller guarantees index is valid
-            unsafe {
-                std::ptr::drop_in_place(self.chunks[chunk_idx][slot_idx].as_mut_ptr());
+            // Only drop if the slot was initialized
+            if self.initialized.remove(&index.0) {
+                // SAFETY: Slot was initialized via store()
+                unsafe {
+                    std::ptr::drop_in_place(self.chunks[chunk_idx][slot_idx].as_mut_ptr());
+                }
             }
             self.free_indices.push(index.0);
         }
@@ -240,20 +256,15 @@ impl<T> Default for MemoryPool<T> {
 
 impl<T> Drop for MemoryPool<T> {
     fn drop(&mut self) {
-        // Drop all initialized values
-        // Note: We track which slots are in free_indices (uninitialized)
-        // vs allocated (initialized and need dropping)
-        let free_set: std::collections::HashSet<usize> =
-            self.free_indices.iter().copied().collect();
-
-        for idx in 0..self.total_allocated {
-            if !free_set.contains(&idx) {
-                let (chunk_idx, slot_idx) = self.index_to_chunk_slot(idx);
-                if chunk_idx < self.chunks.len() {
-                    // SAFETY: This slot was allocated and not deallocated
-                    unsafe {
-                        std::ptr::drop_in_place(self.chunks[chunk_idx][slot_idx].as_mut_ptr());
-                    }
+        // Only drop slots that were actually initialized via store()
+        // This fixes UB where allocate() without store() would cause
+        // drop_in_place on uninitialized memory
+        for &idx in &self.initialized {
+            let (chunk_idx, slot_idx) = self.index_to_chunk_slot(idx);
+            if chunk_idx < self.chunks.len() {
+                // SAFETY: Slot is in initialized set, meaning store() was called
+                unsafe {
+                    std::ptr::drop_in_place(self.chunks[chunk_idx][slot_idx].as_mut_ptr());
                 }
             }
         }
@@ -526,5 +537,40 @@ mod tests {
 
         // Value should still be accessible
         assert_eq!(pool.get(idx), Some(&42));
+    }
+
+    /// Regression test for BUG-1: allocate() without store() must not cause UB in Drop.
+    /// Previously, Drop assumed all non-free slots were initialized, which was wrong.
+    #[test]
+    fn test_allocate_without_store_no_ub() {
+        let mut pool: MemoryPool<String> = MemoryPool::new(4);
+
+        // Allocate slots but DON'T call store() - this used to cause UB in Drop
+        let _idx1 = pool.allocate();
+        let _idx2 = pool.allocate();
+        let _idx3 = pool.allocate();
+
+        // Only store to one slot
+        let idx4 = pool.allocate();
+        pool.store(idx4, "initialized".to_string());
+
+        // Drop should only drop idx4, not the uninitialized slots
+        // If this test doesn't crash/ASAN error, the fix works
+        drop(pool);
+    }
+
+    /// Regression test: deallocate() on uninitialized slot must not crash
+    #[test]
+    fn test_deallocate_uninitialized_slot() {
+        let mut pool: MemoryPool<String> = MemoryPool::new(4);
+
+        let idx = pool.allocate();
+        // Don't call store()
+        pool.deallocate(idx); // Should not crash
+
+        // Pool should still be usable
+        let idx2 = pool.allocate();
+        pool.store(idx2, "test".to_string());
+        assert_eq!(pool.get(idx2), Some(&"test".to_string()));
     }
 }

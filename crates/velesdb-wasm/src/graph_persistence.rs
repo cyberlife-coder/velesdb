@@ -105,6 +105,8 @@ impl GraphPersistence {
     }
 
     /// Loads a graph from `IndexedDB` by name.
+    ///
+    /// BUG-6 FIX: Only loads nodes/edges with keys prefixed by `{graph_name}:`
     #[wasm_bindgen]
     pub async fn load(&self, graph_name: &str) -> Result<GraphStore, JsValue> {
         let db = self
@@ -121,10 +123,16 @@ impl GraphPersistence {
         let edges_store = transaction.object_store(EDGES_STORE)?;
 
         let mut graph = GraphStore::new();
-        let _prefix = format!("{graph_name}:");
+        let prefix = format!("{graph_name}:");
 
-        // Load nodes
-        let nodes_request = nodes_store.get_all()?;
+        // BUG-6 FIX: Use key range to only load keys with our graph prefix
+        // IDBKeyRange.bound(prefix, prefix + '\uffff') matches all keys starting with prefix
+        let lower = JsValue::from_str(&prefix);
+        let upper = JsValue::from_str(&format!("{graph_name}:\u{ffff}"));
+        let key_range = web_sys::IdbKeyRange::bound(&lower, &upper)?;
+
+        // Load nodes with prefix filter
+        let nodes_request = nodes_store.get_all_with_key(&key_range)?;
         let nodes_result = wait_for_request(&nodes_request).await?;
         if !nodes_result.is_undefined() {
             let nodes_array: js_sys::Array = nodes_result.unchecked_into();
@@ -136,8 +144,8 @@ impl GraphPersistence {
             }
         }
 
-        // Load edges
-        let edges_request = edges_store.get_all()?;
+        // Load edges with prefix filter
+        let edges_request = edges_store.get_all_with_key(&key_range)?;
         let edges_result = wait_for_request(&edges_request).await?;
         if !edges_result.is_undefined() {
             let edges_array: js_sys::Array = edges_result.unchecked_into();
@@ -170,6 +178,8 @@ impl GraphPersistence {
     }
 
     /// Deletes a saved graph by name.
+    ///
+    /// BUG-7 FIX: Also deletes all nodes and edges with the graph prefix.
     #[wasm_bindgen]
     pub async fn delete_graph(&self, graph_name: &str) -> Result<(), JsValue> {
         let db = self
@@ -184,6 +194,21 @@ impl GraphPersistence {
 
         let transaction =
             db.transaction_with_str_sequence_and_mode(&store_names, IdbTransactionMode::Readwrite)?;
+
+        // BUG-7 FIX: Delete all nodes and edges with the graph prefix
+        let lower = JsValue::from_str(&format!("{graph_name}:"));
+        let upper = JsValue::from_str(&format!("{graph_name}:\u{ffff}"));
+        let key_range = web_sys::IdbKeyRange::bound(&lower, &upper)?;
+
+        // Delete nodes with prefix
+        let nodes_store = transaction.object_store(NODES_STORE)?;
+        let nodes_request = nodes_store.delete(&key_range)?;
+        wait_for_request(&nodes_request).await?;
+
+        // Delete edges with prefix
+        let edges_store = transaction.object_store(EDGES_STORE)?;
+        let edges_request = edges_store.delete(&key_range)?;
+        wait_for_request(&edges_request).await?;
 
         // Delete metadata
         let meta_store = transaction.object_store(META_STORE)?;
