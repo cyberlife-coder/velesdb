@@ -26,7 +26,7 @@ env:
 jobs:
   bench-arm64:
     name: ARM64 Benchmarks
-    runs-on: ubuntu-22.04-arm64
+    runs-on: ubuntu-24.04-arm # GitHub ARM64 runner (larger runners)
     if: github.repository == 'cyberlife-coder/VelesDB'
     
     steps:
@@ -36,8 +36,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
         with:
+          toolchain: stable
           components: rustfmt
 
       - name: Cache cargo registry
@@ -71,7 +72,7 @@ jobs:
           echo "" >> benchmark-results/SUMMARY.md
           echo "**Commit**: ${{ github.sha }}" >> benchmark-results/SUMMARY.md
           echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> benchmark-results/SUMMARY.md
-          echo "**Runner**: ARM64 (ubuntu-22.04-arm64)" >> benchmark-results/SUMMARY.md
+          echo "**Runner**: ARM64 (ubuntu-24.04-arm)" >> benchmark-results/SUMMARY.md
           echo "" >> benchmark-results/SUMMARY.md
           echo "## Raw Results" >> benchmark-results/SUMMARY.md
           echo '```' >> benchmark-results/SUMMARY.md
