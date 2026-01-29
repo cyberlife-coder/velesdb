@@ -126,6 +126,73 @@ impl<T> MemoryPool<T> {
         self.total_allocated
     }
 
+    /// Allocates multiple slots at once for batch operations.
+    ///
+    /// More efficient than calling `allocate()` repeatedly as it
+    /// minimizes grow operations and improves cache locality.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - Number of slots to allocate
+    ///
+    /// # Returns
+    ///
+    /// Vector of pool indices for the allocated slots
+    pub fn allocate_batch(&mut self, count: usize) -> Vec<PoolIndex> {
+        if count == 0 {
+            return Vec::new();
+        }
+
+        let mut result = Vec::with_capacity(count);
+
+        // First, use available free slots
+        let from_free = count.min(self.free_indices.len());
+        for _ in 0..from_free {
+            if let Some(idx) = self.free_indices.pop() {
+                result.push(PoolIndex(idx));
+            }
+        }
+
+        // If we need more, grow and allocate
+        let remaining = count - from_free;
+        if remaining > 0 {
+            // Calculate how many chunks we need
+            let chunks_needed = remaining.div_ceil(self.chunk_size);
+            for _ in 0..chunks_needed {
+                self.grow_for_batch();
+            }
+
+            // Now allocate from free list
+            for _ in 0..remaining {
+                if let Some(idx) = self.free_indices.pop() {
+                    result.push(PoolIndex(idx));
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Prefetches a slot for upcoming access (cache warming).
+    ///
+    /// Call this before accessing a slot to hide memory latency.
+    #[inline]
+    pub fn prefetch(&self, index: PoolIndex) {
+        let (chunk_idx, slot_idx) = self.index_to_chunk_slot(index.0);
+        if chunk_idx < self.chunks.len() {
+            let ptr = self.chunks[chunk_idx][slot_idx].as_ptr();
+            // Use CPU prefetch hint
+            #[cfg(target_arch = "x86_64")]
+            unsafe {
+                std::arch::x86_64::_mm_prefetch(ptr.cast::<i8>(), std::arch::x86_64::_MM_HINT_T0);
+            }
+            #[cfg(target_arch = "aarch64")]
+            {
+                crate::simd_neon_prefetch::prefetch_read_l1(ptr.cast::<u8>());
+            }
+        }
+    }
+
     fn grow(&mut self) {
         let mut chunk: Vec<MaybeUninit<T>> = Vec::with_capacity(self.chunk_size);
         // SAFETY: MaybeUninit doesn't require initialization
@@ -138,6 +205,23 @@ impl<T> MemoryPool<T> {
         // Add new indices to free list (except the last one which we'll return)
         let start = self.total_allocated - self.chunk_size;
         for i in start..(self.total_allocated - 1) {
+            self.free_indices.push(i);
+        }
+    }
+
+    /// Grows the pool and adds ALL new indices to free list (for batch allocation).
+    fn grow_for_batch(&mut self) {
+        let mut chunk: Vec<MaybeUninit<T>> = Vec::with_capacity(self.chunk_size);
+        // SAFETY: MaybeUninit doesn't require initialization
+        unsafe {
+            chunk.set_len(self.chunk_size);
+        }
+        self.chunks.push(chunk.into_boxed_slice());
+        self.total_allocated += self.chunk_size;
+
+        // Add ALL new indices to free list (including last one, batch will pop them)
+        let start = self.total_allocated - self.chunk_size;
+        for i in start..self.total_allocated {
             self.free_indices.push(i);
         }
     }
@@ -381,5 +465,66 @@ mod tests {
         }
 
         assert_eq!(pool.allocated_count(), 400);
+    }
+
+    #[test]
+    fn test_memory_pool_allocate_batch() {
+        let mut pool: MemoryPool<u64> = MemoryPool::new(4);
+
+        // Allocate a batch of 10 slots
+        let indices = pool.allocate_batch(10);
+        assert_eq!(indices.len(), 10);
+
+        // Store values
+        for (i, idx) in indices.iter().enumerate() {
+            pool.store(*idx, i as u64 * 10);
+        }
+
+        // Verify all values
+        for (i, idx) in indices.iter().enumerate() {
+            assert_eq!(pool.get(*idx), Some(&(i as u64 * 10)));
+        }
+
+        assert_eq!(pool.allocated_count(), 10);
+    }
+
+    #[test]
+    fn test_memory_pool_allocate_batch_empty() {
+        let mut pool: MemoryPool<u64> = MemoryPool::new(4);
+        let indices = pool.allocate_batch(0);
+        assert!(indices.is_empty());
+        assert_eq!(pool.allocated_count(), 0);
+    }
+
+    #[test]
+    fn test_memory_pool_allocate_batch_with_free_slots() {
+        let mut pool: MemoryPool<u64> = MemoryPool::new(4);
+
+        // Allocate and deallocate some slots
+        let idx1 = pool.allocate();
+        let idx2 = pool.allocate();
+        pool.store(idx1, 1);
+        pool.store(idx2, 2);
+        pool.deallocate(idx1);
+        pool.deallocate(idx2);
+
+        // Now batch allocate - should reuse freed slots first
+        let indices = pool.allocate_batch(5);
+        assert_eq!(indices.len(), 5);
+        assert_eq!(pool.allocated_count(), 5);
+    }
+
+    #[test]
+    fn test_memory_pool_prefetch() {
+        let mut pool: MemoryPool<u64> = MemoryPool::new(4);
+
+        let idx = pool.allocate();
+        pool.store(idx, 42);
+
+        // Prefetch should not crash
+        pool.prefetch(idx);
+
+        // Value should still be accessible
+        assert_eq!(pool.get(idx), Some(&42));
     }
 }
