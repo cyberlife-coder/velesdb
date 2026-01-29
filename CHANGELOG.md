@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bundle optimization documentation (`docs/wasm/bundle-optimization.md`)
   - 6 new TDD tests for worker infrastructure
 
+- **EPIC-052: VelesQL Advanced Features** ✅ COMPLETE
+  - `detect_query_type()` for unified /query endpoint routing
+  - `QueryType` enum: Search, Aggregation, Rows, Graph
+  - 5 new TDD tests for query type detection
+
 - **EPIC-039: Correlated Subqueries** ✅ COMPLETE
   - `detect_correlated_columns()` for automatic correlation detection
   - `SubqueryStrategy` enum: CacheResult, PerRow, RewriteAsJoin, Materialize
