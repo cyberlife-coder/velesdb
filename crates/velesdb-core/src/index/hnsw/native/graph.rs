@@ -313,18 +313,13 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         // Generate additional random entry points for diversity
         let mut entry_points = vec![current_ep];
         if num_probes > 1 && count > 10 {
-            let mut state = self.rng_state.load(Ordering::Relaxed);
             for _ in 1..num_probes.min(4) {
-                // Simple xorshift for random selection
-                state ^= state << 13;
-                state ^= state >> 7;
-                state ^= state << 17;
-                let random_id = (state as usize) % count;
+                let random_state = self.next_random();
+                let random_id = (random_state as usize) % count;
                 if !entry_points.contains(&random_id) {
                     entry_points.push(random_id);
                 }
             }
-            self.rng_state.store(state, Ordering::Relaxed);
         }
 
         // Search from all entry points - use full ef_search budget
@@ -344,15 +339,13 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         self.vectors.read()[node_id].clone()
     }
 
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
-    fn random_layer(&self) -> usize {
-        // Thread-safe xorshift64 PRNG for layer selection using atomic CAS
-        // This prevents race conditions where two threads could read the same state
-        let new_state = loop {
+    /// Thread-safe xorshift64 PRNG using atomic CAS.
+    ///
+    /// This prevents race conditions where two threads could read the same state
+    /// and generate identical random values. Used by both `random_layer()` and
+    /// `search_multi_entry()` for consistent thread-safe random number generation.
+    fn next_random(&self) -> u64 {
+        loop {
             let state = self.rng_state.load(Ordering::Relaxed);
             let mut next = state;
             next ^= next << 13;
@@ -366,10 +359,19 @@ impl<D: DistanceEngine> NativeHnsw<D> {
                 Ordering::Relaxed,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => break next,
+                Ok(_) => return next,
                 Err(_) => continue, // Another thread updated, retry
             }
-        };
+        }
+    }
+
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    fn random_layer(&self) -> usize {
+        let new_state = self.next_random();
 
         // Convert to uniform [0, 1) and apply exponential distribution
         let uniform = (new_state as f64) / (u64::MAX as f64);
