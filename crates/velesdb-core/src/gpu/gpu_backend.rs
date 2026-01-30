@@ -143,11 +143,16 @@ impl GpuAccelerator {
     ///
     /// * `vectors` - Flat array of vectors (`num_vectors` * `dimension`)
     /// * `query` - Query vector
-    /// * `dimension` - Vector dimension
+    /// * `dimension` - Vector dimension (must be <= u32::MAX)
     ///
     /// # Returns
     ///
     /// Vector of cosine similarities, one per input vector.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `dimension` or `num_vectors` exceeds `u32::MAX`.
+    /// The GPU shader uses 32-bit parameters.
     #[must_use]
     pub fn batch_cosine_similarity(
         &self,
@@ -159,6 +164,18 @@ impl GpuAccelerator {
         if num_vectors == 0 {
             return Vec::new();
         }
+
+        // Validate GPU shader parameter constraints
+        assert!(
+            dimension <= u32::MAX as usize,
+            "GPU batch_cosine_similarity: dimension {} exceeds u32::MAX",
+            dimension
+        );
+        assert!(
+            num_vectors <= u32::MAX as usize,
+            "GPU batch_cosine_similarity: num_vectors {} exceeds u32::MAX",
+            num_vectors
+        );
 
         // Create buffers
         let query_buffer = self
@@ -193,6 +210,7 @@ impl GpuAccelerator {
         });
 
         // Params: [dimension, num_vectors]
+        // SAFETY: dimension and num_vectors validated above to fit in u32
         #[allow(clippy::cast_possible_truncation)]
         let params = [dimension as u32, num_vectors as u32];
         let params_buffer = self

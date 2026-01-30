@@ -356,10 +356,9 @@ fn hamming_scalar(a: &[f32], b: &[f32]) -> u32 {
 }
 
 #[cfg(target_arch = "x86_64")]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn hamming_popcnt(a: &[f32], b: &[f32]) -> u32 {
-    // Use existing implementation - safe cast as hamming distance is always positive integer
-    crate::simd_explicit::hamming_distance_simd(a, b) as u32
+    // Use the native u32 implementation directly - no cast needed
+    crate::simd_explicit::hamming_distance_simd_u32(a, b)
 }
 
 /// AVX-512 VPOPCNTDQ placeholder for Hamming distance.

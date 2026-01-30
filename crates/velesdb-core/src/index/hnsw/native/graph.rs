@@ -350,12 +350,19 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         clippy::cast_sign_loss
     )]
     fn random_layer(&self) -> usize {
-        // Simple xorshift64 PRNG for layer selection
-        let mut state = self.rng_state.load(Ordering::Relaxed);
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        self.rng_state.store(state, Ordering::Relaxed);
+        // Atomic xorshift64 PRNG for layer selection
+        // Uses fetch_update to ensure thread-safe read-modify-write
+        // This prevents race conditions where multiple threads could read
+        // the same state and generate identical random layers
+        let state = self
+            .rng_state
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut state| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                Some(state)
+            })
+            .unwrap_or_else(|s| s); // fetch_update always succeeds with Some
 
         // Convert to uniform [0, 1) and apply exponential distribution
         let uniform = (state as f64) / (u64::MAX as f64);

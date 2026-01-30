@@ -123,9 +123,22 @@ impl Bm25Index {
     ///
     /// # Arguments
     ///
-    /// * `id` - Unique document identifier
+    /// * `id` - Unique document identifier (must be <= u32::MAX)
     /// * `text` - Document text to index
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` exceeds `u32::MAX`. The BM25 index uses `RoaringBitmap`
+    /// internally which only supports 32-bit document IDs.
     pub fn add_document(&self, id: u64, text: &str) {
+        assert!(
+            id <= u64::from(u32::MAX),
+            "BM25 document ID {} exceeds u32::MAX ({}). \
+             The BM25 index uses RoaringBitmap which only supports 32-bit IDs.",
+            id,
+            u32::MAX
+        );
+
         let tokens = Self::tokenize(text);
         if tokens.is_empty() {
             return;
@@ -148,7 +161,8 @@ impl Bm25Index {
 
         // Update inverted index with adaptive PostingList
         // PostingList auto-promotes to Roaring when cardinality exceeds threshold
-        #[allow(clippy::cast_possible_truncation)] // Doc IDs typically fit in u32
+        // SAFETY: id validated above to fit in u32
+        #[allow(clippy::cast_possible_truncation)]
         let id_u32 = id as u32;
         {
             let mut inv_idx = self.inverted_index.write();
@@ -183,10 +197,24 @@ impl Bm25Index {
 
     /// Removes a document from the index.
     ///
+    /// # Arguments
+    ///
+    /// * `id` - Document identifier (must be <= u32::MAX)
+    ///
     /// # Returns
     ///
     /// `true` if the document was found and removed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` exceeds `u32::MAX`.
     pub fn remove_document(&self, id: u64) -> bool {
+        assert!(
+            id <= u64::from(u32::MAX),
+            "BM25 document ID {} exceeds u32::MAX",
+            id
+        );
+
         let doc = {
             let mut docs = self.documents.write();
             docs.remove(&id)
@@ -194,6 +222,7 @@ impl Bm25Index {
 
         if let Some(doc) = doc {
             // Remove from inverted index
+            // SAFETY: id validated above to fit in u32
             #[allow(clippy::cast_possible_truncation)]
             let id_u32 = id as u32;
             {

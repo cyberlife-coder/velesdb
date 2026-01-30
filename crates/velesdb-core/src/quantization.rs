@@ -145,10 +145,23 @@ impl BinaryQuantizedVector {
     }
 
     /// Serializes the binary quantized vector to bytes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if dimension exceeds `u32::MAX` (4,294,967,295).
+    /// This is a theoretical limit as vectors of this size would require
+    /// ~512MB of binary data alone.
     #[must_use]
     pub fn to_bytes(&self) -> Vec<u8> {
+        assert!(
+            self.dimension <= u32::MAX as usize,
+            "BinaryQuantizedVector dimension {} exceeds u32::MAX for serialization",
+            self.dimension
+        );
+
         let mut bytes = Vec::with_capacity(4 + self.data.len());
         // Store dimension as u32 (4 bytes)
+        // SAFETY: dimension validated above to fit in u32
         #[allow(clippy::cast_possible_truncation)]
         bytes.extend_from_slice(&(self.dimension as u32).to_le_bytes());
         bytes.extend_from_slice(&self.data);
