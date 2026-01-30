@@ -347,7 +347,11 @@ impl<D: DistanceEngine> NativeHnsw<D> {
     fn next_random(&self) -> u64 {
         loop {
             let state = self.rng_state.load(Ordering::Relaxed);
-            let mut next = state;
+            let mut next = if state == 0 {
+                0x853c_49e6_748f_ea9b // Golden ratio-based seed
+            } else {
+                state
+            };
             next ^= next << 13;
             next ^= next >> 7;
             next ^= next << 17;
@@ -365,6 +369,10 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         }
     }
 
+    // SAFETY: Layer selection uses exponential distribution capped at 15.
+    // - cast_precision_loss: u64 to f64 may lose precision but is acceptable for PRNG
+    // - cast_possible_truncation: floor() result is capped at 15, fitting in usize
+    // - cast_sign_loss: -ln(uniform) is always positive since uniform is in (0, 1)
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
@@ -375,7 +383,10 @@ impl<D: DistanceEngine> NativeHnsw<D> {
 
         // Convert to uniform [0, 1) and apply exponential distribution
         let uniform = (new_state as f64) / (u64::MAX as f64);
-        let level = (-uniform.ln() * self.level_mult).floor() as usize;
+
+        // Additional safety: clamp uniform to avoid -ln(0) = infinity
+        let uniform_safe = uniform.max(f64::MIN_POSITIVE);
+        let level = (-uniform_safe.ln() * self.level_mult).floor() as usize;
         level.min(15) // Cap at 16 layers
     }
 
