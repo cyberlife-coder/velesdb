@@ -143,11 +143,16 @@ impl GpuAccelerator {
     ///
     /// * `vectors` - Flat array of vectors (`num_vectors` * `dimension`)
     /// * `query` - Query vector
-    /// * `dimension` - Vector dimension
+    /// * `dimension` - Vector dimension (must be <= u32::MAX)
     ///
     /// # Returns
     ///
     /// Vector of cosine similarities, one per input vector.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `dimension` or `num_vectors` exceeds `u32::MAX`, as GPU shader
+    /// parameters use 32-bit integers.
     #[must_use]
     pub fn batch_cosine_similarity(
         &self,
@@ -159,6 +164,18 @@ impl GpuAccelerator {
         if num_vectors == 0 {
             return Vec::new();
         }
+
+        // Validate GPU shader parameter bounds
+        assert!(
+            dimension <= u32::MAX as usize,
+            "GPU batch dimension {} exceeds u32::MAX",
+            dimension
+        );
+        assert!(
+            num_vectors <= u32::MAX as usize,
+            "GPU batch num_vectors {} exceeds u32::MAX",
+            num_vectors
+        );
 
         // Create buffers
         let query_buffer = self

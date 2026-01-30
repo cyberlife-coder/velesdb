@@ -350,15 +350,29 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         clippy::cast_sign_loss
     )]
     fn random_layer(&self) -> usize {
-        // Simple xorshift64 PRNG for layer selection
-        let mut state = self.rng_state.load(Ordering::Relaxed);
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        self.rng_state.store(state, Ordering::Relaxed);
+        // Thread-safe xorshift64 PRNG for layer selection using atomic CAS
+        // This prevents race conditions where two threads could read the same state
+        let new_state = loop {
+            let state = self.rng_state.load(Ordering::Relaxed);
+            let mut next = state;
+            next ^= next << 13;
+            next ^= next >> 7;
+            next ^= next << 17;
+
+            // Atomic compare-and-swap ensures only one thread updates the state
+            match self.rng_state.compare_exchange_weak(
+                state,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break next,
+                Err(_) => continue, // Another thread updated, retry
+            }
+        };
 
         // Convert to uniform [0, 1) and apply exponential distribution
-        let uniform = (state as f64) / (u64::MAX as f64);
+        let uniform = (new_state as f64) / (u64::MAX as f64);
         let level = (-uniform.ln() * self.level_mult).floor() as usize;
         level.min(15) // Cap at 16 layers
     }
