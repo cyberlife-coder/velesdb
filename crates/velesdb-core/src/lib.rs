@@ -182,6 +182,9 @@ pub mod storage;
 pub mod sync;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod update_check;
+pub mod util;
+#[cfg(test)]
+mod util_tests;
 pub mod vector_ref;
 #[cfg(test)]
 mod vector_ref_tests;
