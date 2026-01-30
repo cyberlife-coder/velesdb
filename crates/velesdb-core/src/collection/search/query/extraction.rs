@@ -38,6 +38,9 @@ impl Collection {
                             Error::Config(format!("Missing query parameter: ${name}"))
                         })?;
                         if let serde_json::Value::Array(arr) = val {
+                            // SAFETY: f64 to f32 cast may lose precision but not truncate.
+                            // Vector values are typically normalized floats in [-1, 1] or small
+                            // magnitudes where f32 precision is sufficient for similarity search.
                             #[allow(clippy::cast_possible_truncation)]
                             arr.iter()
                                 .map(|v| {
@@ -89,6 +92,9 @@ impl Collection {
                             Error::Config(format!("Missing query parameter: ${name}"))
                         })?;
                         if let serde_json::Value::Array(arr) = val {
+                            // SAFETY: f64 to f32 cast may lose precision but not truncate.
+                            // Vector values are typically normalized floats in [-1, 1] or small
+                            // magnitudes where f32 precision is sufficient for similarity search.
                             #[allow(clippy::cast_possible_truncation)]
                             arr.iter()
                                 .map(|v| {
@@ -185,6 +191,9 @@ impl Collection {
                     .get(name)
                     .ok_or_else(|| Error::Config(format!("Missing query parameter: ${name}")))?;
                 if let serde_json::Value::Array(arr) = val {
+                    // SAFETY: f64 to f32 cast may lose precision but not truncate.
+                    // Vector values are typically normalized floats in [-1, 1] or small
+                    // magnitudes where f32 precision is sufficient for similarity search.
                     #[allow(clippy::cast_possible_truncation)]
                     arr.iter()
                         .map(|v| {

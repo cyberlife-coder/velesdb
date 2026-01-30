@@ -137,7 +137,9 @@ impl Bm25Index {
             *term_freqs.entry(token.clone()).or_insert(0) += 1;
         }
 
-        #[allow(clippy::cast_possible_truncation)] // Document length won't exceed u32::MAX
+        // SAFETY: Document token count is bounded by practical text length limits.
+        // Even a 1GB document with single-char tokens would have ~1B tokens, fitting in u32.
+        #[allow(clippy::cast_possible_truncation)]
         let doc_length = tokens.len() as u32;
 
         // Create document (move term_freqs, avoid clone)
@@ -148,7 +150,9 @@ impl Bm25Index {
 
         // Update inverted index with adaptive PostingList
         // PostingList auto-promotes to Roaring when cardinality exceeds threshold
-        #[allow(clippy::cast_possible_truncation)] // Doc IDs typically fit in u32
+        // SAFETY: Document IDs are assigned sequentially and bounded by practical limits.
+        // BM25 index is designed for text search where 4B documents is sufficient.
+        #[allow(clippy::cast_possible_truncation)]
         let id_u32 = id as u32;
         {
             let mut inv_idx = self.inverted_index.write();
@@ -194,6 +198,8 @@ impl Bm25Index {
 
         if let Some(doc) = doc {
             // Remove from inverted index
+            // SAFETY: Document IDs are assigned sequentially and bounded by practical limits.
+            // BM25 index is designed for text search where 4B documents is sufficient.
             #[allow(clippy::cast_possible_truncation)]
             let id_u32 = id as u32;
             {

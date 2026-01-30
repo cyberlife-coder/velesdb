@@ -344,6 +344,10 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         self.vectors.read()[node_id].clone()
     }
 
+    // SAFETY: Layer selection uses exponential distribution capped at 15.
+    // - cast_precision_loss: u64 to f64 may lose precision but is acceptable for PRNG
+    // - cast_possible_truncation: floor() result is capped at 15, fitting in usize
+    // - cast_sign_loss: -ln(uniform) is always positive since uniform is in (0, 1)
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
