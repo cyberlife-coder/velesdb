@@ -356,6 +356,10 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         self.vectors.read()[node_id].clone()
     }
 
+    // SAFETY: Layer selection uses exponential distribution capped at 15.
+    // - cast_precision_loss: u64 to f64 may lose precision but is acceptable for PRNG
+    // - cast_possible_truncation: floor() result is capped at 15, fitting in usize
+    // - cast_sign_loss: -ln(uniform) is always positive since uniform is in (0, 1)
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
@@ -369,6 +373,9 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         let old_state = self
             .rng_state
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut state| {
+                if state == 0 {
+                    state = 0x853c_49e6_748f_ea9b;
+                }
                 state ^= state << 13;
                 state ^= state >> 7;
                 state ^= state << 17;
@@ -379,13 +386,19 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         // fetch_update returns the OLD state, so we need to re-apply the
         // transformation to get the NEW state that was actually stored
         let mut state = old_state;
+        if state == 0 {
+            state = 0x853c_49e6_748f_ea9b;
+        }
         state ^= state << 13;
         state ^= state >> 7;
         state ^= state << 17;
 
-        // Convert to uniform [0, 1) and apply exponential distribution
+        // Convert to uniform (0, 1) and apply exponential distribution
         let uniform = (state as f64) / (u64::MAX as f64);
-        let level = (-uniform.ln() * self.level_mult).floor() as usize;
+
+        // Additional safety: clamp uniform to avoid -ln(0) = infinity
+        let uniform_safe = uniform.max(f64::MIN_POSITIVE);
+        let level = (-uniform_safe.ln() * self.level_mult).floor() as usize;
         level.min(15) // Cap at 16 layers
     }
 

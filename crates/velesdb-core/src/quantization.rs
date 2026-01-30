@@ -238,13 +238,14 @@ impl QuantizedVector {
             vec![128u8; vector.len()]
         } else {
             let scale = 255.0 / range;
+            // SAFETY: Value is clamped to [0.0, 255.0] before cast, guaranteeing it fits in u8.
+            // cast_sign_loss is safe because clamped value is always non-negative.
+            // cast_possible_truncation is safe because clamped value is always <= 255.
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             vector
                 .iter()
                 .map(|&v| {
                     let normalized = (v - min) * scale;
-                    // Clamp to [0, 255] to handle floating point errors
-                    // Safe: clamped to valid u8 range
                     normalized.round().clamp(0.0, 255.0) as u8
                 })
                 .collect()

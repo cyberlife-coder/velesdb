@@ -261,6 +261,8 @@ impl GpuAccelerator {
             compute_pass.set_pipeline(&self.cosine_pipeline);
             compute_pass.set_bind_group(0, &bind_group, &[]);
 
+            // SAFETY: num_vectors is bounded by GPU buffer limits. div_ceil(256) reduces
+            // the value further. Even 4B vectors / 256 = 16M workgroups, fitting in u32.
             #[allow(clippy::cast_possible_truncation)]
             let workgroups = num_vectors.div_ceil(256) as u32;
             compute_pass.dispatch_workgroups(workgroups, 1, 1);

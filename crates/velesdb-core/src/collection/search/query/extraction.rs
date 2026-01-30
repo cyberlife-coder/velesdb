@@ -50,10 +50,8 @@ impl Collection {
                                                 #[allow(clippy::cast_possible_truncation)]
                                                 Some(f as f32)
                                             } else if f.is_finite() {
-                                                // Value is finite but outside f32 range
                                                 None
                                             } else {
-                                                // NaN or Infinity - preserve as f32
                                                 #[allow(clippy::cast_possible_truncation)]
                                                 Some(f as f32)
                                             }
@@ -110,7 +108,6 @@ impl Collection {
                                 .map(|v| {
                                     v.as_f64()
                                         .and_then(|f| {
-                                            // Validate f64 value is within f32 representable range
                                             if f.is_finite()
                                                 && f >= f64::from(f32::MIN)
                                                 && f <= f64::from(f32::MAX)
@@ -228,7 +225,6 @@ impl Collection {
                         .map(|v| {
                             v.as_f64()
                                 .and_then(|f| {
-                                    // Validate f64 value is within f32 representable range
                                     if f.is_finite()
                                         && f >= f64::from(f32::MIN)
                                         && f <= f64::from(f32::MAX)
