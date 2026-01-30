@@ -313,18 +313,30 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         // Generate additional random entry points for diversity
         let mut entry_points = vec![current_ep];
         if num_probes > 1 && count > 10 {
-            let mut state = self.rng_state.load(Ordering::Relaxed);
             for _ in 1..num_probes.min(4) {
-                // Simple xorshift for random selection
+                // Atomic xorshift64 PRNG for thread-safe random selection
+                // Uses fetch_update to ensure thread-safe read-modify-write
+                let old_state = self
+                    .rng_state
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut state| {
+                        state ^= state << 13;
+                        state ^= state >> 7;
+                        state ^= state << 17;
+                        Some(state)
+                    })
+                    .unwrap_or_else(|s| s);
+
+                // fetch_update returns the OLD state, re-apply transformation
+                let mut state = old_state;
                 state ^= state << 13;
                 state ^= state >> 7;
                 state ^= state << 17;
+
                 let random_id = (state as usize) % count;
                 if !entry_points.contains(&random_id) {
                     entry_points.push(random_id);
                 }
             }
-            self.rng_state.store(state, Ordering::Relaxed);
         }
 
         // Search from all entry points - use full ef_search budget
@@ -354,7 +366,7 @@ impl<D: DistanceEngine> NativeHnsw<D> {
         // Uses fetch_update to ensure thread-safe read-modify-write
         // This prevents race conditions where multiple threads could read
         // the same state and generate identical random layers
-        let state = self
+        let old_state = self
             .rng_state
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut state| {
                 state ^= state << 13;
@@ -362,7 +374,14 @@ impl<D: DistanceEngine> NativeHnsw<D> {
                 state ^= state << 17;
                 Some(state)
             })
-            .unwrap_or_else(|s| s); // fetch_update always succeeds with Some
+            .unwrap_or_else(|s| s);
+
+        // fetch_update returns the OLD state, so we need to re-apply the
+        // transformation to get the NEW state that was actually stored
+        let mut state = old_state;
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
 
         // Convert to uniform [0, 1) and apply exponential distribution
         let uniform = (state as f64) / (u64::MAX as f64);
