@@ -491,6 +491,17 @@ jobs:
       - name: Verify version sync across policed manifests (REL-07, PR-time)
         run: python3 scripts/check-version-sync.py
 
+      # `WalBatchConfig` was promised "at the next major"; v6.0.0 shipped two
+      # days later without it, because the constraint lived in a doc comment and
+      # nothing reads a doc comment when a version is bumped. This runs beside
+      # the version guard on purpose: the release commit that raises the major
+      # is the one that must go red.
+      - name: Deferred removals are not overdue
+        run: python3 scripts/check-deferred-removals.py
+
+      - name: Test the deferred-removal guard
+        run: python3 -m unittest scripts.tests.test_check_deferred_removals
+
       - name: Test feature-claims audit script
         run: python3 -m unittest scripts.tests.test_check_feature_claims
 
