@@ -690,10 +690,34 @@ jobs:
       - name: Install cargo-semver-checks (prebuilt)
         uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2.87.0
         with:
+          # 0.46.0 is the last release whose own `rust_version` is 1.90, this
+          # workspace's MSRV — 0.47.0 already requires 1.91. That matters for a
+          # `cargo install` from source, which this is not: `install-action`
+          # fetches a prebuilt binary, so the pin is really about keeping the
+          # rustdoc-JSON format the tool consumes in step with the toolchain
+          # that produces it. Pinned exactly, like every other tool here.
           tool: cargo-semver-checks@0.46.0
 
+      # `--release-type minor` on core, and the asymmetry is deliberate.
+      #
+      # `develop` carries the published version between releases: the bump lives
+      # in a `chore(release)` commit. cargo-semver-checks reads equal versions as
+      # a PATCH update, which satisfies no required level at all — so all 207
+      # Deny lints arm, including the 21 that only require a MINOR bump:
+      # `function_must_use_added`, `*_marked_deprecated` and friends. This crate
+      # holds 1369 `#[must_use]` and deprecates public items as a first-class
+      # practice, so the next PR adding either would turn `CI Success` red with
+      # no remedy short of a version bump the process only performs at release.
+      # Declaring the release type keeps every breaking lint armed and drops the
+      # bump reminder that the release commit covers anyway.
+      #
+      # velesdb-memory needs no flag: a 0.x baseline is already read as a minor
+      # update, so its Minor lints are disarmed by the tool itself. Same
+      # enforcement, reached differently.
       - name: Check public API against the last published release
-        run: cargo semver-checks check-release -p velesdb-core -p velesdb-memory
+        run: |
+          cargo semver-checks check-release -p velesdb-core --release-type minor
+          cargo semver-checks check-release -p velesdb-memory
 
   # ===========================================================================
   # Hygiene gate: spelling (typos), manifest formatting (taplo), unused
