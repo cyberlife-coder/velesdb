@@ -67,6 +67,14 @@ const _: () = assert!(
 );
 const _: () = assert!(VECTORS_V2_DATA_OFFSET > VECTORS_HEADER_BYTES);
 
+// A v3 would silently inherit the v2 layout from the fallback arm below. This
+// fails the build on the version bump instead, so the offsets are revisited
+// deliberately rather than by omission.
+const _: () = assert!(
+    VECTORS_FORMAT_VERSION == 2,
+    "a new .vectors version needs its own arm in `vectors_data_offset`"
+);
+
 /// Byte offset of the payload for a given `.vectors` format version.
 ///
 /// Only versions the reader accepts reach this; anything else is rejected by
@@ -171,33 +179,12 @@ impl<D: DistanceEngine + Send + Sync> NativeHnsw<D> {
             None => (0, 0),
         };
 
-        // When the arena IS this file, the payload is already here, and
-        // `File::create` would truncate the very bytes the live mapping still
-        // points at — a SIGBUS on the next read, not a slow path. So flush the
-        // pages and rewrite the header in place; the payload never moves and is
-        // never copied onto itself through a second descriptor.
-        //
-        // Data before header is the order the crash-consistency argument
-        // requires: a header claiming more vectors than the file holds is the
-        // one state a reader cannot detect, because it validates the declared
-        // payload against the file length and a stale-but-smaller count simply
-        // reads fewer vectors. The generation stamp written after this call is
-        // still what commits the set.
         #[cfg(feature = "persistence")]
-        if vectors_guard
+        if let Some(adopted) = vectors_guard
             .as_ref()
-            .and_then(crate::perf_optimizations::ContiguousVectors::backing_path)
-            .is_some_and(|mapped| mapped == vectors_path)
+            .filter(|v| v.backing_path() == Some(vectors_path.as_path()))
         {
-            if let Some(vectors) = vectors_guard.as_ref() {
-                vectors.flush_backing().map_err(std::io::Error::other)?;
-            }
-            // `write(true)` without `truncate`: the header region is the first
-            // 4 096 bytes and the mapping starts after it, so these two never
-            // address the same bytes.
-            let mut file = OpenOptions::new().write(true).open(&vectors_path)?;
-            Self::write_vectors_header(&mut file, count, dimension)?;
-            file.flush()?;
+            Self::rewrite_adopted_vectors_header(adopted, &vectors_path, count, dimension)?;
             return Ok(count);
         }
 
@@ -209,6 +196,37 @@ impl<D: DistanceEngine + Send + Sync> NativeHnsw<D> {
         }
         writer.flush()?;
         Ok(count)
+    }
+
+    /// Rewrites the header of a `.vectors` file the arena is mapped from.
+    ///
+    /// The payload is already in the file — it *is* the arena — so nothing but
+    /// the header needs writing. `File::create` would truncate the very bytes
+    /// the live mapping still points at, a SIGBUS on the next read rather than
+    /// a slow path, so the file is opened for writing without truncation. The
+    /// header region is the first [`VECTORS_V2_DATA_OFFSET`] bytes and the
+    /// mapping starts after it, so the two never address the same bytes.
+    ///
+    /// Pages before header, deliberately. A header claiming more vectors than
+    /// the file holds is the one state a reader cannot detect: it validates the
+    /// declared payload against the file length, and a stale-but-smaller count
+    /// simply reads fewer vectors. The generation stamp written after this call
+    /// is still what commits the set.
+    ///
+    /// # Errors
+    ///
+    /// Returns `io::Error` if the flush, the open or the header write fails.
+    #[cfg(feature = "persistence")]
+    fn rewrite_adopted_vectors_header(
+        vectors: &crate::perf_optimizations::ContiguousVectors,
+        vectors_path: &Path,
+        count: u64,
+        dimension: u32,
+    ) -> std::io::Result<()> {
+        vectors.flush_backing().map_err(std::io::Error::other)?;
+        let mut file = OpenOptions::new().write(true).open(vectors_path)?;
+        Self::write_vectors_header(&mut file, count, dimension)?;
+        file.flush()
     }
 
     /// Writes the vectors file header — version, count, dimension — followed by
@@ -491,39 +509,9 @@ impl<D: DistanceEngine + Send + Sync> NativeHnsw<D> {
         // file cannot possibly back.
         Self::validate_vectors_file_len(count, dimension, file_len, data_offset)?;
 
-        // The durable file can BE the arena when its payload is page-aligned
-        // (v2) and the target's byte order is the one the payload holds. That
-        // retires the duplicate copy this load would otherwise make (#2173).
-        //
-        // Failure falls through to the copy path deliberately: a mapped arena
-        // is an optimisation, never a requirement — the same rule `new_arena`
-        // states for the disposable arena, for the same reason. A filesystem
-        // that will not host a mapping must cost the optimisation and nothing
-        // else, never a collection that refuses to open.
-        //
-        // Adoption must be observation-only. `ContiguousVectors` floors an
-        // arena's capacity at `MIN_ARENA_CAPACITY` and sizes the file to match,
-        // so a store below that floor would be EXTENDED merely by being opened
-        // — and opening a collection must never write to it. That is not a
-        // tidiness point: `velesdb-memory`'s migration resume proves the source
-        // unchanged by hashing these files, so a store that grows on open makes
-        // a correct resume look like a corrupted one. Below the floor, take the
-        // copy path; what adoption would save there is negligible anyway.
         #[cfg(feature = "persistence")]
-        if count >= crate::perf_optimizations::ContiguousVectors::MIN_ARENA_CAPACITY
-            && version == VECTORS_FORMAT_VERSION
-            && cfg!(target_endian = "little")
-        {
-            match crate::perf_optimizations::ContiguousVectors::open_file_backed(
-                path, dimension, count, count,
-            ) {
-                Ok(storage) => return Ok((Some(storage), count)),
-                Err(e) => tracing::warn!(
-                    "{path:?} could not be adopted as the vector arena ({e}); \
-                     reading it into a separate arena instead, which costs a copy, \
-                     not correctness"
-                ),
-            }
+        if let Some(storage) = Self::adopt_durable_file(path, version, count, dimension) {
+            return Ok((Some(storage), count));
         }
 
         // v1 leaves the reader exactly here; v2 has reserved padding to skip.
@@ -532,6 +520,61 @@ impl<D: DistanceEngine + Send + Sync> NativeHnsw<D> {
 
         let storage = Self::read_vector_data(&mut reader, count, dimension, arena_home)?;
         Ok((Some(storage), count))
+    }
+
+    /// Maps `path` as the graph's arena when the file can serve as one (#2173).
+    ///
+    /// `None` means the caller must fall back to reading the payload into a
+    /// separate arena. Three conditions have to hold, each for its own reason:
+    ///
+    /// - **The payload must be page-aligned**, which only v2 guarantees. A v1
+    ///   payload starts at byte 16, where `FileArena`'s data region cannot.
+    /// - **The target's byte order must be the payload's.** `.vectors` is
+    ///   explicitly little-endian; mapping it on a big-endian target would
+    ///   reinterpret every float rather than convert it.
+    /// - **The store must reach [`ContiguousVectors::MIN_ARENA_CAPACITY`].**
+    ///   Below that floor an arena is sized up to it and the file grows to
+    ///   match, so adoption would *write*. Opening a collection must never
+    ///   write to it — `velesdb-memory`'s migration resume proves the source
+    ///   store unchanged by hashing these files, so a store that grew on open
+    ///   would make a correct resume look like a corrupted one. What adoption
+    ///   saves below the floor is negligible anyway.
+    ///
+    /// A refused mapping is a warning, never an error: a mapped arena is an
+    /// optimisation, not a requirement. That is the rule `new_arena` states for
+    /// the disposable arena, for the same reason — this must never stop a
+    /// collection from opening that opened fine before the feature existed.
+    ///
+    /// [`ContiguousVectors::MIN_ARENA_CAPACITY`]: crate::perf_optimizations::ContiguousVectors::MIN_ARENA_CAPACITY
+    #[cfg(feature = "persistence")]
+    fn adopt_durable_file(
+        path: &Path,
+        version: u32,
+        count: usize,
+        dimension: usize,
+    ) -> Option<crate::perf_optimizations::ContiguousVectors> {
+        use crate::perf_optimizations::ContiguousVectors;
+
+        if version != VECTORS_FORMAT_VERSION
+            || !cfg!(target_endian = "little")
+            || count < ContiguousVectors::MIN_ARENA_CAPACITY
+        {
+            return None;
+        }
+
+        // Capacity is the count: the file holds exactly the payload its header
+        // declares, and asking for a larger arena is what would extend it.
+        match ContiguousVectors::open_file_backed(path, dimension, count, count) {
+            Ok(storage) => Some(storage),
+            Err(e) => {
+                tracing::warn!(
+                    "{path:?} could not be adopted as the vector arena ({e}); \
+                     reading it into a separate arena instead, which costs a copy, \
+                     not correctness"
+                );
+                None
+            }
+        }
     }
 
     /// Rejects vector headers whose declared `count * dimension * 4` payload

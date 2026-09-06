@@ -1,31 +1,37 @@
 //! Where a graph's f32 arena lives on disk, and what becomes of it after.
 //!
-//! # Why the arena is disposable rather than persistent
+//! # When a graph gets a disposable arena, and when it does not
 //!
 //! The obvious design is to make the arena file *the* stored vectors — map
-//! `{basename}.vectors` and skip deserialization entirely. Two facts rule
-//! that out for now, and both were found by reading the code rather than
-//! assumed:
+//! `{basename}.vectors` and skip deserialization entirely. Since #2173 that is
+//! exactly what happens, but only when three things hold: the file is format
+//! v2, so its payload starts page-aligned where [`FileArena`]'s data region
+//! does; the target is little-endian, because `.vectors` is explicitly
+//! little-endian while an arena file is native-endian raw memory; and the store
+//! reaches `ContiguousVectors::MIN_ARENA_CAPACITY`, below which an arena is
+//! sized up to that floor and the file would grow merely by being opened.
 //!
-//! 1. **Vacuum makes two live indexes on purpose.** `build_vacuum_replacement`
-//!    constructs a whole replacement graph while the old one is still serving
-//!    reads, then swaps. A single well-known arena path would put both of them
-//!    on the same bytes, and [`FileArena`]'s exclusive lock — which exists
-//!    because two mappings of one file are two `&mut [f32]` aliases — would
-//!    refuse the second. The lock would be doing its job; the design would be
-//!    wrong.
-//! 2. **`.vectors` is portable and the arena is not.** `.vectors` converts
-//!    explicitly through `to_le_bytes`; an arena file is native-endian raw
-//!    memory. Merging them trades a portable on-disk format for one that
-//!    cannot cross an endianness boundary — a real cost, for a load-time win
-//!    that #2112 never asked for.
+//! **A graph that adopted `.vectors` holds no [`ArenaHome`] at all.** That is
+//! the whole safety argument for this module after #2173: `Drop` here removes
+//! its file unconditionally, so the way a durable store cannot be deleted by
+//! accident is that no home is ever constructed for it — not a flag saying not
+//! to. [`ArenaHome::claim`] reinforces it from the other side by building
+//! `hnsw-{token}.arena` names and nothing else, so the two mechanisms cannot
+//! meet even by mistake.
 //!
-//! So each live graph gets its **own** arena file, and deletes it when it
-//! drops. The arena is a cache of something already persisted, which is what
-//! makes throwing it away free: `.vectors` remains the durable copy, and a
-//! reopened collection simply builds a fresh arena from it.
+//! Everything outside those three conditions still gets its own disposable
+//! arena, deleted on drop: v1 files written before #2213, big-endian targets,
+//! stores below the capacity floor, and any mapping the filesystem refuses. The
+//! arena is then a cache of something already persisted, which is what makes
+//! throwing it away free — `.vectors` remains the durable copy, and a reopened
+//! collection builds a fresh arena from it.
 //!
-//! # What this costs, and why the end state is different
+//! [`sweep_stale`](ArenaHome::sweep_stale) and
+//! [`is_arena_file`](ArenaHome::is_arena_file) therefore keep their subject.
+//! They exist so a sweep never eats `.vectors`, and disposable arenas still
+//! exist to sweep.
+//!
+//! # What the disposable path costs
 //!
 //! Being a second copy is not free, and the cost is write volume rather than
 //! space. Loading a collection writes every vector through the mapping, so
@@ -43,12 +49,17 @@
 //! The trade is deliberate: on a memory-constrained device, spending write
 //! bandwidth to move the f32 arena out of the resident set is usually worth
 //! it, since that arena is the single largest thing a quantized index holds.
-//! But it *is* a trade, and it is the reason the end state is not this
-//! design. Mapping `{basename}.vectors` itself removes the duplicate
-//! entirely — no second copy, no second write, no deletion — and the only
-//! thing standing in the way is that the arena is native-endian where
-//! `.vectors` is explicitly little-endian. That is a format question, not an
-//! architectural one, and it is tracked separately.
+//! It is also why adoption is preferred wherever it applies — mapping
+//! `{basename}.vectors` removes the duplicate entirely: no second copy, no
+//! second write, no deletion.
+//!
+//! An earlier version of this doc called that "a format question, not an
+//! architectural one". It was neither statement's fault that both turned out
+//! wrong. Aligning the payload was a format change (#2213), but adopting the
+//! file also moved *when* vector data becomes durable and *who* may delete it,
+//! which is architecture — and the endianness the paragraph named was only one
+//! of three conditions, the other two being page alignment and the capacity
+//! floor. The reasoning is recorded on #2173 rather than repeated here.
 //!
 //! [`FileArena`]: crate::contiguous_file_arena::FileArena
 
