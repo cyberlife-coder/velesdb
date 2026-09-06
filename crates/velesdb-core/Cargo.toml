@@ -216,6 +216,13 @@ name = "persistence_save_scale"
 harness = false
 
 [[bench]]
+name = "persistence_load_scale"
+harness = false
+# Adoption of the durable file is `persistence`-gated; without the feature this
+# would measure the copy path on both sides and say nothing.
+required-features = ["persistence"]
+
+[[bench]]
 name = "scalability_benchmark"
 harness = false
 
