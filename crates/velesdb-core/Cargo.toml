@@ -110,8 +110,29 @@ version = "2.7"
 ## - `openapi`: Enables utoipa::ToSchema derives on api_types DTOs.
 ## - `loom`: Enables loom-based concurrency testing (nightly only).
 ##   Run with: `cargo +nightly test --features loom --test loom_tests`
+## - `bytemuck`: Compatibility only — see the note on its line below.
 default = ["persistence"]
-gpu = ["wgpu", "pollster", "bytemuck/derive"]
+gpu = ["wgpu", "pollster", "bytemuck"]
+## Compatibility feature. `bytemuck` was `optional = true` before the
+## `.vectors` dump path (#2212) made it mandatory, which silently dropped the
+## `bytemuck` feature Cargo had derived from that `optional = true` — and which
+## `gpu` used to enable transitively.
+##
+## It re-enables `bytemuck/derive`, not merely the name. The 6.0.0 manifest
+## carried `features = ["derive"]` on the optional dependency, so enabling the
+## implicit feature there gave the caller bytemuck **with** its derive macro. A
+## stub that only kept the name valid would resolve and then fail to compile
+## for anyone who wrote `velesdb-core = { features = ["bytemuck"] }` alongside
+## their own `bytemuck` dependency and expected `Pod` to be derivable — the very
+## break this is meant to undo, moved from resolution to compilation.
+##
+## `cargo-semver-checks` cannot catch that: `feature_missing` and
+## `feature_no_longer_enables_feature` read this package's feature graph, where
+## an empty stub looks restored. Green is not the same as fixed.
+##
+## With this line, `gpu` is byte-for-byte its 6.0.0 form again, and a non-GPU
+## build that never names the feature still pulls no proc-macro.
+bytemuck = ["bytemuck/derive"]
 internal-bench = []
 ## Enables the standardized SIFT1M ANN benchmark
 ## (`cargo bench -p velesdb-core --bench sift1m_recall --features bench-sift1m`).

@@ -45,6 +45,10 @@ tauri = { version = "2.11", default-features = false, features = ["test"] }
 [features]
 default = ["velesdb-core/default"]
 bench-sift1m = ["velesdb-core/bench-sift1m"]
+## Forwards the `velesdb-core/bytemuck` compatibility stub (see that crate's
+## Cargo.toml) so this parity table stays a straight mirror, not an
+## exception list.
+bytemuck = ["velesdb-core/bytemuck"]
 gpu = ["velesdb-core/gpu"]
 internal-bench = ["velesdb-core/internal-bench"]
 loom = ["velesdb-core/loom"]
