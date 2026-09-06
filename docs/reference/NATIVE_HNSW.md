@@ -131,6 +131,33 @@ maps it directly inherits that constraint and must gate on `target_endian`.
 before v2 rejects a v2 file with `Unsupported version: 2`. Downgrading past this
 change therefore requires re-persisting the index.
 
+#### The file may be the arena
+
+Since #2173 a v2 `.vectors` is mapped directly as the graph's f32 arena instead
+of being read into a second buffer, when three conditions hold:
+
+1. the file is v2, so its payload starts page-aligned;
+2. the target is little-endian, matching the payload's declared byte order;
+3. the store holds at least `ContiguousVectors::MIN_ARENA_CAPACITY` vectors.
+
+The third is not a performance threshold. Below it an arena is sized up to that
+floor and the file grows to match, so adoption would *write* — and **opening a
+collection must never write to it**, because `velesdb-memory`'s migration resume
+proves a source store unchanged by hashing these files.
+
+Anything outside those conditions falls back to a disposable arena and the copy
+path, with a warning. A mapped arena is an optimisation, never a requirement: a
+filesystem that refuses the mapping costs the optimisation and nothing else.
+
+Two consequences worth knowing when reading this code:
+
+- A graph that adopted `.vectors` holds **no `ArenaHome`**. `ArenaHome::drop`
+  removes its file unconditionally, so the durable store is protected by the
+  absence of a home rather than by a flag telling it not to delete.
+- `save()` does not truncate an adopted file. It flushes the mapped pages, then
+  rewrites the header in place — pages before header, so a reader never sees a
+  header claiming more vectors than the file holds.
+
 #### Load-time validation (untrusted file safety)
 
 A persisted index is treated as **untrusted input**. `load` validates the
