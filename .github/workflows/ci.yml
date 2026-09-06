@@ -657,6 +657,45 @@ jobs:
         run: cargo deny check advisories licenses bans sources
 
   # ===========================================================================
+  # Public API stability: cargo-semver-checks diffs each published library's
+  # current API against its last crates.io release and fails if a breaking
+  # change ships without the major version bump SemVer requires.
+  #
+  # Scoped to the two crates this repo treats as consumable Rust libraries:
+  # velesdb-core (the embeddable engine) and velesdb-memory (independent 0.x
+  # versioning, see AGENTS.md). velesdb-cli has no [lib] target; velesdb-server
+  # and velesdb-mobile are consumed through their own binding surfaces (REST,
+  # UniFFI), not as Rust dependencies, so their crate-level API is not the
+  # contract that matters.
+  #
+  # Version pinned to the last release compatible with this workspace's MSRV
+  # (1.90) — 0.50.0+ requires rustc 1.93.
+  # ===========================================================================
+  semver-checks:
+    name: Semver Checks (velesdb-core, velesdb-memory)
+    if: github.event.action != 'edited' || github.event.changes.base != null
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@stable # Intentionally unpinned - uses toolchain input
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: "velesdb-semver-checks"
+          save-if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+
+      - name: Install cargo-semver-checks (prebuilt)
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2.87.0
+        with:
+          tool: cargo-semver-checks@0.46.0
+
+      - name: Check public API against the last published release
+        run: cargo semver-checks check-release -p velesdb-core -p velesdb-memory
+
+  # ===========================================================================
   # Hygiene gate: spelling (typos), manifest formatting (taplo), unused
   # dependencies (cargo-machete). All three are fast prebuilt binaries; the
   # whole job runs in well under a minute and needs no Rust toolchain.
@@ -1933,7 +1972,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, test, security, hygiene, wasm-check, memory-feature-matrix, internal-bench-check, drop-tightening-check, openapi-drift, mcp-doc-contract, velesql-conformance, perf-smoke, bench-sift1m-compile, perf-gate-e2e, python-sdk-tests, python-integrations, node-binding-tests, node-binding-tests-windows, gate-contracts, doc-contract, promise-contract, production-gates, propagation-guard, binary-size, pr-governance, sonarcloud]
+    needs: [lint, test, security, semver-checks, hygiene, wasm-check, memory-feature-matrix, internal-bench-check, drop-tightening-check, openapi-drift, mcp-doc-contract, velesql-conformance, perf-smoke, bench-sift1m-compile, perf-gate-e2e, python-sdk-tests, python-integrations, node-binding-tests, node-binding-tests-windows, gate-contracts, doc-contract, promise-contract, production-gates, propagation-guard, binary-size, pr-governance, sonarcloud]
     if: (always()) && (github.event.action != 'edited' || github.event.changes.base != null)
     steps:
       # sonarcloud is intentionally absent from the gate below: it is an
@@ -1965,5 +2004,6 @@ jobs:
           [[ "${{ needs.binary-size.result }}" == "success" ]] && \
           [[ "${{ needs.pr-governance.result }}" == "success" ]] && \
           [[ "${{ needs.security.result }}" == "success" ]] && \
+          [[ "${{ needs.semver-checks.result }}" == "success" ]] && \
           [[ "${{ needs.hygiene.result }}" == "success" ]] && \
           echo "✅ CI passed" || { echo "❌ CI failed"; exit 1; }
