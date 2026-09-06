@@ -679,8 +679,8 @@ jobs:
   # UniFFI), not as Rust dependencies, so their crate-level API is not the
   # contract that matters.
   #
-  # Version pinned to the last release compatible with this workspace's MSRV
-  # (1.90) — 0.50.0+ requires rustc 1.93.
+  # See the inline comments below for why the tool version and `--release-type`
+  # are what they are.
   # ===========================================================================
   semver-checks:
     name: Semver Checks (velesdb-core, velesdb-memory)
