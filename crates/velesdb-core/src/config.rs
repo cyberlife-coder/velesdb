@@ -179,7 +179,11 @@ pub mod server {
     ///   *absent* — and `data_dir` also conflicts irreducibly with the path
     ///   passed to `Database::open`. Parsed and validated only so existing
     ///   TOML files keep loading; removal targets the next major, the same
-    ///   accept-and-warn cycle `[wal_batch]` (#2078) is already running.
+    ///   warn-not-reject cycle `[wal_batch]` (#2078) is already running —
+    ///   though unlike `[wal_batch]`, which has no validation at all,
+    ///   `mmap_cache_mb` keeps its pre-existing hard range check (`0` and
+    ///   values over the cap still fail load), left as is on purpose rather
+    ///   than loosened as a second change bundled into this one.
     ///   [`crate::config::VelesConfig::validate`] warns when any of the
     ///   three is set away from its default.
     /// - **`storage_mode` is still reserved**, pending its own decision

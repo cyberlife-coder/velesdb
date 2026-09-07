@@ -180,9 +180,14 @@ impl VelesConfig {
     /// `storage.vector_alignment` have no engine counterpart to wire them
     /// to (issue #2087's per-knob verdict) — not merely unwired, *absent*.
     /// Warn — rather than reject — when a config sets any of them away from
-    /// its default, the same accept-and-warn treatment [`Self::warn_inert_wal_batch`]
-    /// gives `[wal_batch]`, so existing files keep loading while no
-    /// deployment silently believes these knobs do anything.
+    /// its default, so existing files keep loading while no deployment
+    /// silently believes these knobs do anything. This is only *half* the
+    /// same treatment [`Self::warn_inert_wal_batch`] gives `[wal_batch]`:
+    /// that field has no validation at all, while `validate_storage` keeps a
+    /// hard range check on `mmap_cache_mb` (`0` and values over the cap are
+    /// still rejected). That check predates this deprecation and is left as
+    /// is deliberately — loosening it is a second, separate behavior change
+    /// this PR does not make.
     /// `storage.storage_mode` is a separate, still-open decision and stays
     /// reported by [`Self::warn_inert_engine_sections`] instead.
     fn warn_deprecated_storage_fields(&self) {

@@ -14,12 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   three have no engine counterpart to wire them to at all (`data_dir` also
   conflicts irreducibly with the path passed to `Database::open`), unlike
   `storage_mode` and the rest of `[hnsw]`/`[search]`, which are still
-  pending a wiring decision. They now get the same accept-and-warn
-  deprecation cycle `[wal_batch]` (#2078) is already running:
-  `VelesConfig::validate` logs a warning naming exactly which of the three
-  is set away from its default, and removal targets the next major. No
-  behavior changes — a config file setting them today keeps loading exactly
-  as before.
+  pending a wiring decision. They now get the same warn-not-reject
+  deprecation cycle `[wal_batch]` (#2078) is already running — though
+  `[wal_batch]` has no validation at all, while `mmap_cache_mb` keeps its
+  pre-existing hard range check (left as is; loosening it is a separate
+  change). `VelesConfig::validate` logs a warning naming exactly which of
+  the three is set away from its default, and removal targets the next
+  major (tracked by `scripts/check-deferred-removals.py`). No behavior
+  changes — a config file setting them today keeps loading exactly as
+  before.
 
 ### Fixed
 

@@ -187,6 +187,7 @@ max_layers = 0
 [storage]
 # Répertoire de données principal
 # Default: "./velesdb_data"
+# Deprecated (#2087) — parsed but has no effect; targeted for removal at 7.0.0.
 data_dir = "./velesdb_data"
 
 # Mode de stockage des vecteurs
@@ -194,16 +195,17 @@ data_dir = "./velesdb_data"
 # - mmap: Fichiers mappés en mémoire (recommandé pour grands datasets)
 # - memory: Tout en RAM (plus rapide, limité par RAM disponible)
 # Default: "mmap"
+# Reserved (#2087) — parsed but not yet applied by the engine.
 storage_mode = "mmap"
 
 # Taille maximale du cache mmap en mégaoctets
-# Range: 64 - 65536 (64 GB max)
 # Default: 1024 (1 GB)
+# Deprecated (#2087) — parsed but has no effect; targeted for removal at 7.0.0.
 mmap_cache_mb = 1024
 
 # Alignement mémoire pour les vecteurs (octets)
-# Valeurs: 32 | 64 | 128
-# Default: 64 (optimal pour la plupart des CPUs)
+# Default: 64
+# Deprecated (#2087) — parsed but has no effect; targeted for removal at 7.0.0.
 vector_alignment = 64
 
 # -----------------------------------------------------------------------------
@@ -406,10 +408,12 @@ name kept as they are:
 | `VELESDB_WAL_BATCH_ENABLED` | `wal_batch.enabled` | `false` |
 | `VELESDB_LOGGING_LEVEL` | `logging.level` | `debug` |
 
-Setting one of these is exactly equivalent to setting its TOML key — so a
-**reserved** key stays reserved when set this way. `VELESDB_SEARCH_MAX_RESULTS`
+Setting one of these is exactly equivalent to setting its TOML key. Most are
+**reserved** and stay reserved when set this way: `VELESDB_SEARCH_MAX_RESULTS`
 is parsed, validated and applied by nothing, just like `[search] max_results`;
 see the note at the top of this guide for what the engine acts on.
+`VELESDB_STORAGE_DATA_DIR` is stronger than reserved — `storage.data_dir` is
+**deprecated**, not merely unwired; see [Section \[storage\]](#section-storage).
 
 Note `VELESDB_STORAGE_STORAGE_MODE`, not `VELESDB_STORAGE_MODE`: the section is
 `storage` and the field is `storage_mode`. Earlier revisions of this table
@@ -578,10 +582,13 @@ reserved: no engine counterpart exists to wire them to at all, and
 `data_dir` also conflicts irreducibly with the path passed to
 `Database::open`. They are parsed and validated only so existing TOML files
 keep loading, and are targeted for removal at the next major — the same
-accept-and-warn cycle `[wal_batch]` (#2078) is already running.
-`VelesConfig::validate` warns when any of the three is set away from its
-default. `storage_mode` is a separate, still-open decision (distinct from
-`quantization::StorageMode`) and stays reserved rather than deprecated.
+warn-not-reject cycle `[wal_batch]` (#2078) is already running, though
+`[wal_batch]` has no validation at all while `mmap_cache_mb` keeps its
+pre-existing hard range check (`0` and values over the cap still fail load
+— left as is; loosening it would be a second change). `VelesConfig::validate`
+warns when any of the three is set away from its default. `storage_mode` is
+a separate, still-open decision (distinct from `quantization::StorageMode`)
+and stays reserved rather than deprecated.
 
 ### Section [limits]
 
@@ -681,8 +688,7 @@ unaffected.
 default_mode = "fast"  # Latence minimale pour dev
 
 [storage]
-data_dir = "./dev_data"
-storage_mode = "memory"  # Tout en RAM
+storage_mode = "memory"  # Tout en RAM — reserved (#2087), not yet applied
 
 [logging]
 level = "debug"
@@ -700,10 +706,7 @@ m = 48
 ef_construction = 600
 
 [storage]
-data_dir = "/var/lib/velesdb"
-storage_mode = "mmap"
-mmap_cache_mb = 4096
-vector_alignment = 64
+storage_mode = "mmap"  # reserved (#2087), not yet applied
 
 [server]
 host = "0.0.0.0"

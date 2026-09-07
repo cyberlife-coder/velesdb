@@ -53,14 +53,14 @@ max_layers = 0
 
 [storage]
 # "mmap" or "memory". mmap keeps the resident set small, which is what you
-# want on a phone; "memory" trades RAM for latency.
+# want on a phone; "memory" trades RAM for latency. Reserved — parsed but
+# not yet applied by the engine (core issue #2087).
 storage_mode = "mmap"
 
-# Mmap cache in megabytes. 1024 is the desktop default and is far too generous
-# for a phone — 128 or 256 is a more realistic starting point.
+# mmap_cache_mb and vector_alignment are deprecated (core issue #2087): no
+# engine counterpart exists to wire them to. Parsed only for backward
+# compatibility with existing config files; tuning them has no effect.
 mmap_cache_mb = 256
-
-# Vector alignment in bytes; 64 matches the cache line on ARM64 and x86_64.
 vector_alignment = 64
 
 [limits]
