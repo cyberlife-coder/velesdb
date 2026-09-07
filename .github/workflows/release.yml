@@ -610,7 +610,7 @@ jobs:
         # Prebuilt binary — NOT `cargo install wasm-pack --locked`, whose own
         # lockfile pins cargo-platform 0.3.3 (MSRV 1.91) and fails to compile
         # under the pinned RUST_VERSION (1.90). Matches ci.yml's wasm job.
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2.87.0
+        uses: taiki-e/install-action@5bf6ce016fd2e72eefc647cbca1e4213f65955b8 # v2.87.5
         with:
           tool: wasm-pack
 
@@ -752,7 +752,7 @@ jobs:
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: VelesDB v${{ needs.validate.outputs.version }}
           body_path: RELEASE_NOTES.md
