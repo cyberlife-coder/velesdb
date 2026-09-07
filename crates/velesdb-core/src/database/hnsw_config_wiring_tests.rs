@@ -326,10 +326,31 @@ fn test_max_layers_reported_alongside_a_configured_wired_knob() {
 fn test_still_unwired_sections_are_reported_wholesale() {
     let mut config = VelesConfig::default();
     config.search.max_results = 42;
-    config.storage.mmap_cache_mb = 2048;
+    config.storage.storage_mode = "memory".to_string();
     assert_eq!(
         config.inert_engine_entries(),
-        vec!["[search]", "[storage]"],
-        "sections with no wired knob stay reported as whole sections"
+        vec!["[search]", "storage.storage_mode"],
+        "[search] has no wired knob and stays reported as a whole section; \
+         storage_mode is the one [storage] field still awaiting a decision"
+    );
+}
+
+#[test]
+fn test_deprecated_storage_fields_are_not_reported_inert() {
+    // data_dir/mmap_cache_mb/vector_alignment have no engine counterpart at
+    // all (issue #2087's verdict) and get their own deprecation warning
+    // instead of being reported here as pending wiring.
+    let mut config = VelesConfig::default();
+    config.storage.data_dir = "/var/lib/velesdb".to_string();
+    config.storage.mmap_cache_mb = 2048;
+    config.storage.vector_alignment = 32;
+    assert!(config.inert_engine_entries().is_empty());
+    assert_eq!(
+        config.deprecated_storage_entries(),
+        vec![
+            "storage.data_dir",
+            "storage.mmap_cache_mb",
+            "storage.vector_alignment",
+        ]
     );
 }

@@ -677,6 +677,11 @@ impl HnswConfigOptions {
 /// All fields are optional — unspecified fields fall back to the engine
 /// defaults (`data_dir="./velesdb_data"`, `storage_mode="mmap"`,
 /// `mmap_cache_mb=1024`, `vector_alignment=64`).
+///
+/// None of these reach the engine yet (core issue #2087): `storage_mode` is
+/// still pending its own wiring decision, and `data_dir`/`mmap_cache_mb`/
+/// `vector_alignment` are deprecated outright — no engine counterpart
+/// exists to wire them to — and targeted for removal at the next major.
 #[pyclass(module = "velesdb", from_py_object)]
 #[derive(Clone, Debug, Default)]
 pub struct StorageOptions {

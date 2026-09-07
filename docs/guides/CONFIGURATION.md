@@ -1,6 +1,6 @@
 # ⚙️ VelesDB Configuration
 
-*Version 6.0.0 — Last updated: 2026-08-08*
+*Version 6.0.0 — Last updated: 2026-09-07*
 
 Complete guide for configuring VelesDB via configuration file, environment variables, and runtime parameters.
 
@@ -49,13 +49,18 @@ To point at a file anywhere else, pass it explicitly:
 > collection and ingest boundaries, and `[hnsw]`'s `m` / `ef_construction`
 > are applied when a collection's index is created (see the precedence chain
 > under [Section \[hnsw\]](#section-hnsw)). Everything else below is parsed
-> and validated but **not** wired: `[search]`, `[storage]`, `[quantization]`
-> and `hnsw.max_layers` (issue #2087), and `[wal_batch]` is parsed and
-> ignored (issue #2078) — its group-commit front was deleted as unwired, and
-> the batch write APIs already pay one durability barrier per call. Setting
-> any unwired key away from its default logs a warning at load, naming
-> exactly what is inert. Query-time overrides (`WITH (ef_search = N)`) are a
-> separate, working mechanism, as are per-collection creation options.
+> and validated but **not** wired: `[search]`, `[quantization]`,
+> `hnsw.max_layers` and `storage.storage_mode` — each still pending its own
+> wiring decision (issue #2087). Setting any of these away from its default
+> logs a warning at load, naming exactly what is inert. Three more
+> `[storage]` fields — `data_dir`, `mmap_cache_mb`, `vector_alignment` — are
+> not pending anything: no engine counterpart exists to wire them to, so
+> they are **deprecated** instead (their own warning, same treatment as
+> `[wal_batch]` below) and targeted for removal at the next major.
+> `[wal_batch]` is parsed and ignored (issue #2078) — its group-commit front
+> was deleted as unwired, and the batch write APIs already pay one
+> durability barrier per call. Query-time overrides (`WITH (ef_search = N)`)
+> are a separate, working mechanism, as are per-collection creation options.
 
 Both binaries can load the **same** file, but only the *engine* sections —
 `[search]`, `[hnsw]`, `[storage]`, `[limits]`, `[quantization]`,
@@ -561,12 +566,22 @@ section — it sizes the candidate pool of one query; nothing here does.
 
 ### Section [storage]
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `data_dir` | string | `"./velesdb_data"` | Data directory |
-| `storage_mode` | string | `"mmap"` | Mode: mmap or memory |
-| `mmap_cache_mb` | int | `1024` | mmap cache in MB |
-| `vector_alignment` | int | `64` | Memory alignment |
+| Key | Type | Default | Description | Applied |
+|-----|------|---------|-------------|---------|
+| `data_dir` | string | `"./velesdb_data"` | Data directory | **no** — deprecated (#2087) |
+| `storage_mode` | string | `"mmap"` | Mode: mmap or memory | **no** — reserved (#2087) |
+| `mmap_cache_mb` | int | `1024` | mmap cache in MB | **no** — deprecated (#2087) |
+| `vector_alignment` | int | `64` | Memory alignment | **no** — deprecated (#2087) |
+
+`data_dir`, `mmap_cache_mb` and `vector_alignment` are deprecated, not
+reserved: no engine counterpart exists to wire them to at all, and
+`data_dir` also conflicts irreducibly with the path passed to
+`Database::open`. They are parsed and validated only so existing TOML files
+keep loading, and are targeted for removal at the next major — the same
+accept-and-warn cycle `[wal_batch]` (#2078) is already running.
+`VelesConfig::validate` warns when any of the three is set away from its
+default. `storage_mode` is a separate, still-open decision (distinct from
+`quantization::StorageMode`) and stays reserved rather than deprecated.
 
 ### Section [limits]
 

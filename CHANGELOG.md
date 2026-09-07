@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deprecated
+
+- **`[storage]` `data_dir`, `mmap_cache_mb` and `vector_alignment` — parsed
+  and validated, never applied.** Issue #2087's per-knob audit found these
+  three have no engine counterpart to wire them to at all (`data_dir` also
+  conflicts irreducibly with the path passed to `Database::open`), unlike
+  `storage_mode` and the rest of `[hnsw]`/`[search]`, which are still
+  pending a wiring decision. They now get the same accept-and-warn
+  deprecation cycle `[wal_batch]` (#2078) is already running:
+  `VelesConfig::validate` logs a warning naming exactly which of the three
+  is set away from its default, and removal targets the next major. No
+  behavior changes — a config file setting them today keeps loading exactly
+  as before.
+
 ### Fixed
 
 - **30 broken rustdoc intra-doc links in `velesdb-core`, and the two lints that
