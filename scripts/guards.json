@@ -1316,6 +1316,20 @@
             "--root",
             "{root}"
           ]
+        },
+        {
+          "vector": "the [storage] entries promised for 7.0.0 (#2087) survived the major",
+          "files": {
+            "Cargo.toml": "[workspace.package]\nversion = \"7.0.0\"\n",
+            "crates/velesdb-core/src/config.rs": "pub struct S { pub mmap_cache_mb: usize }\n"
+          },
+          "accepts": {
+            "Cargo.toml": "[workspace.package]\nversion = \"7.0.0\"\n"
+          },
+          "argv": [
+            "--root",
+            "{root}"
+          ]
         }
       ]
     }
