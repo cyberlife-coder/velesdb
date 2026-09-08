@@ -106,6 +106,59 @@ fn rebuild_stored_ids_deduplicates() {
     assert!(ids.contains(&1));
 }
 
+// --- filter_live_far_end ---
+
+use crate::agent::ttl::{MemoryKind, MemoryTtl};
+use crate::collection::graph::GraphEdge;
+
+fn edge(id: u64, source: u64, target: u64) -> GraphEdge {
+    GraphEdge::new(id, source, target, "RELATES").expect("non-empty label")
+}
+
+#[test]
+fn filter_live_far_end_keeps_edges_whose_far_end_is_not_tracked() {
+    let ttl = MemoryTtl::new();
+    let edges = vec![edge(1, 10, 20), edge(2, 10, 21)];
+
+    let kept = filter_live_far_end(edges.clone(), &ttl, MemoryKind::Semantic, GraphEdge::target);
+
+    assert_eq!(kept, edges);
+}
+
+#[test]
+fn filter_live_far_end_drops_edges_whose_far_end_expired() {
+    let ttl = MemoryTtl::new();
+    ttl.set_expiry(MemoryKind::Semantic, 21, 0); // 0 <= now() => expired
+    let edges = vec![edge(1, 10, 20), edge(2, 10, 21)];
+
+    let kept = filter_live_far_end(edges, &ttl, MemoryKind::Semantic, GraphEdge::target);
+
+    assert_eq!(kept, vec![edge(1, 10, 20)]);
+}
+
+#[test]
+fn filter_live_far_end_checks_source_for_incoming_edges() {
+    let ttl = MemoryTtl::new();
+    ttl.set_expiry(MemoryKind::Semantic, 10, 0); // source of edge 1 expired
+    let edges = vec![edge(1, 10, 20), edge(2, 11, 20)];
+
+    let kept = filter_live_far_end(edges, &ttl, MemoryKind::Semantic, GraphEdge::source);
+
+    assert_eq!(kept, vec![edge(2, 11, 20)]);
+}
+
+#[test]
+fn filter_live_far_end_scopes_expiry_to_the_given_kind() {
+    let ttl = MemoryTtl::new();
+    // Expired under a different subsystem — must not affect Semantic's view.
+    ttl.set_expiry(MemoryKind::Episodic, 20, 0);
+    let edges = vec![edge(1, 10, 20)];
+
+    let kept = filter_live_far_end(edges.clone(), &ttl, MemoryKind::Semantic, GraphEdge::target);
+
+    assert_eq!(kept, edges);
+}
+
 // --- open_or_create_collection (requires persistence + tempdir) ---
 
 #[cfg(feature = "persistence")]

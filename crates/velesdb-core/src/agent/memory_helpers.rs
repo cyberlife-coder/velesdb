@@ -1,10 +1,10 @@
 //! Shared helpers for agent memory subsystems (EPIC-010).
 //!
 //! Extracts common patterns used by `SemanticMemory`, `EpisodicMemory`, and
-//! `ProceduralMemory` to avoid code duplication across the three modules.
-//!
-//! These helpers are ready for adoption by memory submodules.
-//! Currently tested directly; callers will migrate in a follow-up.
+//! `ProceduralMemory` to avoid code duplication across the three modules. All
+//! three have adopted these helpers for their relation, TTL, and
+//! serialization plumbing; tests here cover the helpers directly, and the
+//! per-kind `*_tests.rs` suites cover them again through each public API.
 
 use crate::collection::Collection;
 use crate::{Database, DistanceMetric, Point};
@@ -670,6 +670,24 @@ pub(super) fn relate_memory_points(
     Ok(edge_id)
 }
 
+/// Drops edges whose far end — as picked out by `far_end` — is TTL-expired
+/// in the given subsystem.
+///
+/// `far_end` is `GraphEdge::target` for an outgoing edge or `GraphEdge::source`
+/// for an incoming one: the live endpoint is the one already known to the
+/// caller, so the filter always guards the *other* side.
+fn filter_live_far_end(
+    edges: Vec<crate::collection::graph::GraphEdge>,
+    ttl: &super::ttl::MemoryTtl,
+    kind: super::ttl::MemoryKind,
+    far_end: fn(&crate::collection::graph::GraphEdge) -> u64,
+) -> Vec<crate::collection::graph::GraphEdge> {
+    edges
+        .into_iter()
+        .filter(|edge| !ttl.is_expired(kind, far_end(edge)))
+        .collect()
+}
+
 /// Returns the outgoing relation edges of a memory point, filtering out edges
 /// whose target is TTL-expired in the given subsystem.
 ///
@@ -687,11 +705,12 @@ pub(super) fn relations_of(
     kind: super::ttl::MemoryKind,
 ) -> Result<Vec<crate::collection::graph::GraphEdge>, AgentMemoryError> {
     let collection = get_collection(db, collection_name)?;
-    Ok(collection
-        .get_outgoing_edges(id)
-        .into_iter()
-        .filter(|edge| !ttl.is_expired(kind, edge.target()))
-        .collect())
+    Ok(filter_live_far_end(
+        collection.get_outgoing_edges(id),
+        ttl,
+        kind,
+        crate::collection::graph::GraphEdge::target,
+    ))
 }
 
 /// Bounded twin of [`relations_of`] (#1820): resolves at most `cap` stored
@@ -719,10 +738,12 @@ pub(super) fn relations_of_bounded(
     let collection = get_collection(db, collection_name)?;
     let (edges, total) = collection.get_outgoing_edges_bounded(id, cap);
     Ok(super::BoundedRelations {
-        edges: edges
-            .into_iter()
-            .filter(|edge| !ttl.is_expired(kind, edge.target()))
-            .collect(),
+        edges: filter_live_far_end(
+            edges,
+            ttl,
+            kind,
+            crate::collection::graph::GraphEdge::target,
+        ),
         truncated: total > cap,
     })
 }
@@ -747,11 +768,12 @@ pub(super) fn incoming_relations_of(
     kind: super::ttl::MemoryKind,
 ) -> Result<Vec<crate::collection::graph::GraphEdge>, AgentMemoryError> {
     let collection = get_collection(db, collection_name)?;
-    Ok(collection
-        .get_incoming_edges(id)
-        .into_iter()
-        .filter(|edge| !ttl.is_expired(kind, edge.source()))
-        .collect())
+    Ok(filter_live_far_end(
+        collection.get_incoming_edges(id),
+        ttl,
+        kind,
+        crate::collection::graph::GraphEdge::source,
+    ))
 }
 
 /// Bounded twin of [`incoming_relations_of`] — the incoming mirror of
@@ -773,10 +795,12 @@ pub(super) fn incoming_relations_of_bounded(
     let collection = get_collection(db, collection_name)?;
     let (edges, total) = collection.get_incoming_edges_bounded(id, cap);
     Ok(super::BoundedRelations {
-        edges: edges
-            .into_iter()
-            .filter(|edge| !ttl.is_expired(kind, edge.source()))
-            .collect(),
+        edges: filter_live_far_end(
+            edges,
+            ttl,
+            kind,
+            crate::collection::graph::GraphEdge::source,
+        ),
         truncated: total > cap,
     })
 }
