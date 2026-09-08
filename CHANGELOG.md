@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`.vectors` now has a v2 format: the payload starts page-aligned at byte
+  4096 instead of byte 16.** The header fields are unchanged and at the same
+  offsets; only the payload moved, into a zero-filled reserved gap.
+
+  The gap is not padding for its own sake. The graph's f32 arena hands out
+  `&[f32]` built with `slice::from_raw_parts`, whose contract requires proper
+  alignment, so a payload starting at byte 16 could never be mapped as one.
+  Moving it is what lets the file *be* the arena rather than be copied into one.
+
+  **Compatibility runs one way.** A current binary reads v1 and v2; a binary
+  from before this change rejects a v2 file with `Unsupported version: 2`.
+  Downgrading past this release therefore requires re-persisting the index —
+  a plain `git checkout` of an older build will not open a database written by
+  this one. `.vectors` had no version-compat mechanism at all before this, so
+  the v1 read path was written here rather than inherited.
+
+### Added
+
+- **The durable `.vectors` file is now mapped as the graph's arena** instead of
+  being deserialized into a second copy of the same bytes, on little-endian
+  targets, for v2 files holding at least `MIN_ARENA_CAPACITY` vectors. Anything
+  outside those conditions keeps the copy path: a mapped arena is an
+  optimisation, never a requirement, so a filesystem that refuses the mapping
+  costs the optimisation and nothing else.
+
+  Adoption is observation-only by construction — below the capacity floor an
+  arena would be sized up and the file grown, and **opening a collection must
+  never write to it**, because the memory crate's migration resume proves a
+  source store unchanged by hashing these files. A graph that adopted the
+  durable file carries no `ArenaHome` at all, so the drop that deletes a
+  disposable arena is unreachable rather than merely disabled.
+
+- **`cargo-semver-checks` gates `velesdb-core` and `velesdb-memory`.** Each
+  crate's public API is diffed against its last published release, and a
+  breaking change without the major bump SemVer requires fails the build. Core
+  runs with `--release-type minor`: `develop` carries the published version
+  between releases, which the tool reads as a patch update, arming lints that
+  only a release commit could satisfy.
+
+- **A deferred removal promised for a future major can no longer be skipped by
+  that major.** `scripts/check-deferred-removals.py` carries each promise with
+  every site that must be gone, and fails the release commit that raises the
+  major while a site survives. Written after `v6.0.0` shipped past exactly such
+  a promise, two days after it was recorded in a doc comment nothing reads.
+
+- **Issue bodies and comments are checked for assistant attribution.** The
+  existing guard covered commits, pull request titles and bodies, and tracked
+  content; those two surfaces arrive on events no `pull_request` workflow sees.
+
+- **Two persistence instruments**, `persistence_save_scale` and
+  `persistence_load_scale`, measuring the two halves of the round trip. The
+  load one carries a control arm because a mapped load does not read the
+  vectors — it maps them, and the pages fault in on first touch, so timing the
+  load call alone reports the cost as gone when it has only moved.
+
 ### Deprecated
 
 - **`[storage]` `data_dir`, `mmap_cache_mb` and `vector_alignment` — parsed
@@ -24,7 +81,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes — a config file setting them today keeps loading exactly as
   before.
 
+### Performance
+
+- **The vectors dump writes each vector's bytes in one call rather than one per
+  `f32`** — 15.4 million calls at 20 000 nodes by 768 dimensions, each paying
+  `BufWriter` bookkeeping to move four bytes. Measured on
+  `persistence_save_scale` at 5 000 nodes by 3072d: **~34 % off the whole
+  `save()`**, and ~2.1x on the dump alone once the graph-and-sidecar constant
+  is subtracted.
+
+- **Loading no longer copies the vector payload** when the file is adopted as
+  the arena. The saving is real but its size depends on the query pattern, and
+  `persistence_load_scale`'s module docs carry the measurement with the two
+  caveats that bound it rather than a single flattering ratio.
+
 ### Fixed
+
+- **`GeoPoint` coordinates were validated on insert but not on update.**
+  `update_by_pk`, `update_multi_by_pk` and `batch_update` could each write a
+  latitude or longitude outside `[-90, 90]` / `[-180, 180]`, which then fed
+  `GEO_DISTANCE`/`GEO_BBOX` filtering and the Haversine formula itself. The
+  range check now lives in the write primitive every validated write funnels
+  through, so a future path cannot forget it the way the third one already had.
+
+- **The `bytemuck` feature was removed from `velesdb-core`'s public surface**
+  by the change that made the dependency mandatory, since Cargo derives a
+  feature from `optional = true`. Any downstream manifest naming it — directly
+  or through `gpu` — stopped resolving. Restored as a real feature enabling
+  `bytemuck/derive`, which is what the 6.0.0 manifest gave, rather than a stub
+  that keeps the name valid and fails at compile time instead of at resolution.
+  Caught before release; no published version shipped without it.
+
+- **`velesdb-node`'s tests could not link on macOS**, which blocked every local
+  commit through the pre-commit hook whatever it touched. `napi_build::setup()`
+  emits `rustc-cdylib-link-arg`, which reaches the cdylib and nothing else,
+  while a test binary resolves its own Node-API symbols — supplied by the Node
+  executable at load time, never by a library. CI never saw it: the Node
+  binding job is path-filtered.
 
 - **30 broken rustdoc intra-doc links in `velesdb-core`, and the two lints that
   let them accumulate.** Six were unresolved — all in a module's `//!` header,
