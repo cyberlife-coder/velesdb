@@ -673,23 +673,23 @@ impl HnswConfigOptions {
 
 /// Storage engine settings mapped to
 /// [`velesdb_core::config::StorageConfig`] (the `[storage]` TOML section).
-///
+/// None of these reach the engine yet (core issue #2087) — see each field.
 /// All fields are optional — unspecified fields fall back to the engine
 /// defaults (`data_dir="./velesdb_data"`, `storage_mode="mmap"`,
 /// `mmap_cache_mb=1024`, `vector_alignment=64`).
 #[pyclass(module = "velesdb", from_py_object)]
 #[derive(Clone, Debug, Default)]
 pub struct StorageOptions {
-    /// Data directory path. Default: `"./velesdb_data"`.
+    /// Data directory path. Default: `"./velesdb_data"`. Deprecated (core #2087): no engine counterpart, targeted for removal at 7.0.0.
     #[pyo3(get, set)]
     pub data_dir: Option<String>,
-    /// Storage mode: `"mmap"` or `"memory"`. Default: `"mmap"`.
+    /// Storage mode: `"mmap"` or `"memory"`. Default: `"mmap"`. Reserved (core #2087): parsed but not yet applied.
     #[pyo3(get, set)]
     pub storage_mode: Option<String>,
-    /// Mmap cache size in megabytes. Default: 1024.
+    /// Mmap cache size in megabytes. Default: 1024. Deprecated (core #2087): no engine counterpart, targeted for removal at 7.0.0.
     #[pyo3(get, set)]
     pub mmap_cache_mb: Option<usize>,
-    /// Vector alignment in bytes. Default: 64.
+    /// Vector alignment in bytes. Default: 64. Deprecated (core #2087): no engine counterpart, targeted for removal at 7.0.0.
     #[pyo3(get, set)]
     pub vector_alignment: Option<usize>,
 }

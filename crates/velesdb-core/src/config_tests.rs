@@ -648,4 +648,36 @@ max_batch_size = 64
         assert!(parsed.wal_batch.enabled);
         assert_eq!(parsed.wal_batch.max_batch_size, 64);
     }
+
+    // ========================================================================
+    // Deprecated [storage] fields (issue #2087) — same accept-and-warn
+    // treatment as [wal_batch] above: a TOML file setting them must still
+    // load, and the deprecation must be reported end to end from the parsed
+    // config, not only from a struct built by field assignment.
+    // ========================================================================
+
+    #[test]
+    fn test_veles_config_toml_with_deprecated_storage_fields_still_loads() {
+        let toml = r#"
+[storage]
+data_dir = "/var/lib/velesdb"
+mmap_cache_mb = 2048
+vector_alignment = 32
+"#;
+        let config = VelesConfig::from_toml(toml).expect("parse");
+
+        assert_eq!(config.storage.data_dir, "/var/lib/velesdb");
+        assert_eq!(config.storage.mmap_cache_mb, 2048);
+        assert_eq!(config.storage.vector_alignment, 32);
+        assert_eq!(
+            config.deprecated_storage_entries(),
+            vec![
+                "storage.data_dir",
+                "storage.mmap_cache_mb",
+                "storage.vector_alignment",
+            ]
+        );
+        // storage_mode was left at its default, so it stays out of both reports.
+        assert!(config.inert_engine_entries().is_empty());
+    }
 }

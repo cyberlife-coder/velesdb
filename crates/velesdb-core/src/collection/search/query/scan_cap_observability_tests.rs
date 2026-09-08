@@ -11,70 +11,7 @@
 #![cfg(all(test, feature = "persistence"))]
 
 use crate::point::Point;
-use crate::test_fixtures::fixtures::{make_point_with_payload, setup_collection};
-use std::sync::{Arc, Mutex};
-
-// ============================================================================
-// Minimal warn-capturing tracing subscriber (no extra dev-dependency).
-// ============================================================================
-
-/// Captures WARN-and-worse events as flat `field=value` strings.
-#[derive(Default)]
-struct WarnSink {
-    events: Mutex<Vec<String>>,
-}
-
-struct FlattenVisitor<'a>(&'a mut String);
-
-impl tracing::field::Visit for FlattenVisitor<'_> {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        use std::fmt::Write;
-        let _ = write!(self.0, "{}={:?} ", field.name(), value);
-    }
-}
-
-struct WarnCapture {
-    sink: Arc<WarnSink>,
-}
-
-impl tracing::Subscriber for WarnCapture {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-        // In `tracing`, more severe levels compare LESS (ERROR < WARN < INFO).
-        *metadata.level() <= tracing::Level::WARN
-    }
-
-    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-
-    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-
-    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut line = String::new();
-        event.record(&mut FlattenVisitor(&mut line));
-        self.sink
-            .events
-            .lock()
-            .expect("test: warn sink lock")
-            .push(line);
-    }
-
-    fn enter(&self, _: &tracing::span::Id) {}
-
-    fn exit(&self, _: &tracing::span::Id) {}
-}
-
-/// Runs `f` with a warn-capturing subscriber installed (thread-local) and
-/// returns the captured WARN+ events.
-fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
-    let sink = Arc::new(WarnSink::default());
-    let subscriber = WarnCapture { sink: sink.clone() };
-    let out = tracing::subscriber::with_default(subscriber, f);
-    let events = sink.events.lock().expect("test: warn sink lock").clone();
-    (out, events)
-}
+use crate::test_fixtures::fixtures::{capture_warns, make_point_with_payload, setup_collection};
 
 // ============================================================================
 // Fixture

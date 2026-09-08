@@ -48,13 +48,14 @@ max_layers = 0
 
 [storage]
 # "mmap" or "memory". mmap keeps the resident set small — the right default for
-# a desktop app that may sit in the background for hours.
+# a desktop app that may sit in the background for hours. Reserved — parsed
+# but not yet applied by the engine (core issue #2087).
 storage_mode = "mmap"
 
-# Mmap cache in megabytes. Range: 1..=1048576.
+# mmap_cache_mb and vector_alignment are deprecated (core issue #2087): no
+# engine counterpart exists to wire them to. Parsed only for backward
+# compatibility with existing config files; tuning them has no effect.
 mmap_cache_mb = 1024
-
-# Vector alignment in bytes; 64 matches the cache line on x86_64 and ARM64.
 vector_alignment = 64
 
 [limits]

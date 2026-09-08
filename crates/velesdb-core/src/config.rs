@@ -172,12 +172,24 @@ pub mod server {
 
     /// Storage configuration section.
     ///
-    /// **Reserved — parsed and validated, not yet applied.** `[limits]`
-    /// and `[hnsw]` reach the engine; this section does not.
-    /// `VelesConfig::validate` warns when it deviates from its defaults.
-    /// Wiring is tracked in issue #2087 (`data_dir` in particular conflicts
-    /// with the path passed to `Database::open` and may go through
-    /// deprecation instead).
+    /// Issue #2087's per-knob verdict split this section in two:
+    ///
+    /// - **`data_dir`, `mmap_cache_mb`, `vector_alignment` are deprecated.**
+    ///   No engine counterpart exists to wire them to — not merely unwired,
+    ///   *absent* — and `data_dir` also conflicts irreducibly with the path
+    ///   passed to `Database::open`. Parsed and validated only so existing
+    ///   TOML files keep loading; removal targets the next major, the same
+    ///   warn-not-reject cycle `[wal_batch]` (#2078) is already running —
+    ///   though unlike `[wal_batch]`, which has no validation at all,
+    ///   `mmap_cache_mb` keeps its pre-existing hard range check (`0` and
+    ///   values over the cap still fail load), left as is on purpose rather
+    ///   than loosened as a second change bundled into this one.
+    ///   [`crate::config::VelesConfig::validate`] warns when any of the
+    ///   three is set away from its default.
+    /// - **`storage_mode` is still reserved**, pending its own decision
+    ///   (distinct from `quantization::StorageMode`; whether the engine has
+    ///   a memory-only mode to select is not established). Also reported by
+    ///   the same validation when set away from its default.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(default)]
     pub struct StorageConfig {

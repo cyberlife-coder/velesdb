@@ -10,6 +10,7 @@
 use crate::config::VelesConfig;
 use crate::index::hnsw::HnswParams;
 use crate::quantization::StorageMode;
+use crate::test_fixtures::fixtures::capture_warns;
 use crate::{Database, DistanceMetric};
 use tempfile::tempdir;
 
@@ -323,13 +324,70 @@ fn test_max_layers_reported_alongside_a_configured_wired_knob() {
 }
 
 #[test]
-fn test_still_unwired_sections_are_reported_wholesale() {
+fn test_search_reported_wholesale_storage_mode_reported_by_field() {
     let mut config = VelesConfig::default();
     config.search.max_results = 42;
-    config.storage.mmap_cache_mb = 2048;
+    config.storage.storage_mode = "memory".to_string();
     assert_eq!(
         config.inert_engine_entries(),
-        vec!["[search]", "[storage]"],
-        "sections with no wired knob stay reported as whole sections"
+        vec!["[search]", "storage.storage_mode"],
+        "[search] has no wired knob and stays reported as a whole section; \
+         storage_mode is the one [storage] field still awaiting a decision"
+    );
+}
+
+#[test]
+fn test_deprecated_storage_fields_emit_a_warning() {
+    // The list built by deprecated_storage_entries() is assertable; the
+    // tracing::warn! call in warn_deprecated_storage_fields() that actually
+    // fires it is not, short of capturing it — deleting that call would
+    // leave every other test in this file green while the warning it is
+    // meant to guarantee silently stopped firing.
+    let mut config = VelesConfig::default();
+    config.storage.mmap_cache_mb = 2048;
+
+    let ((), warns) = capture_warns(|| {
+        config
+            .validate()
+            .expect("test: default config plus one deprecated field validates");
+    });
+
+    assert!(
+        warns.iter().any(|w| w.contains("storage.mmap_cache_mb")),
+        "expected a warning naming the deviating field, got: {warns:?}"
+    );
+}
+
+#[test]
+fn test_default_config_emits_no_deprecation_warning() {
+    let config = VelesConfig::default();
+
+    let ((), warns) = capture_warns(|| {
+        config.validate().expect("test: default config validates");
+    });
+
+    assert!(
+        warns.is_empty(),
+        "a default config must not warn about anything: {warns:?}"
+    );
+}
+
+#[test]
+fn test_deprecated_storage_fields_are_not_reported_inert() {
+    // data_dir/mmap_cache_mb/vector_alignment have no engine counterpart at
+    // all (issue #2087's verdict) and get their own deprecation warning
+    // instead of being reported here as pending wiring.
+    let mut config = VelesConfig::default();
+    config.storage.data_dir = "/var/lib/velesdb".to_string();
+    config.storage.mmap_cache_mb = 2048;
+    config.storage.vector_alignment = 32;
+    assert!(config.inert_engine_entries().is_empty());
+    assert_eq!(
+        config.deprecated_storage_entries(),
+        vec![
+            "storage.data_dir",
+            "storage.mmap_cache_mb",
+            "storage.vector_alignment",
+        ]
     );
 }

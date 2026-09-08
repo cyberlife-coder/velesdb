@@ -57,6 +57,23 @@ DEFERRED_REMOVALS: "list[dict]" = [
         # removes it — a historical note is not stale merely because history
         # moved on, and forcing its deletion would falsify the record.
     },
+    {
+        "what": "the three inert [storage] entries (#2087)",
+        "remove_at_major": 7,
+        "issue": 2087,
+        # The Rust fields, the guide that documents them, and the Python option
+        # mirror that still writes them through `to_core()`. The mirror is listed
+        # because the compiler will not fail when the core fields go: the Python
+        # surface is a separate struct that would keep advertising settings with
+        # nowhere left to land.
+        "sites": [
+            ("crates/velesdb-core/src/config.rs", "pub data_dir: String"),
+            ("crates/velesdb-core/src/config.rs", "pub mmap_cache_mb: usize"),
+            ("crates/velesdb-core/src/config.rs", "pub vector_alignment: usize"),
+            ("crates/velesdb-python/src/options.rs", "pub mmap_cache_mb:"),
+            ("docs/guides/CONFIGURATION.md", "mmap_cache_mb"),
+        ],
+    },
 ]
 
 #: Anchored inside `[workspace.package]`, and matching any version string
