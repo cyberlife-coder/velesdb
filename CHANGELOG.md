@@ -156,6 +156,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Registered in `scripts/guards.json` with a refusal vector whose accepted
   control is an npm double that exits 1 in both states.
 
+- **The npm advisory gate audited four of the eight tracked lockfiles**, and
+  the four it omitted were audited by nothing. `js-yaml` was published
+  vulnerable (GHSA-2883-xcg3-v3hh, high: `maxTotalMergeKeys` does not bound CPU
+  for empty merge sources) on 2026-09-09 and reached the default branch inside
+  `crates/velesdb-node`, found by Dependabot rather than by the gate. Bumped
+  4.3.1 → 4.3.2, lockfile-only, same major. The matrix now lists all eight
+  roots, and the missing half of the check exists: the suite proved every
+  matrix entry was a real directory but never that the matrix was complete, so
+  `test_every_tracked_lockfile_is_audited` compares it against `git ls-files`
+  — no hard-coded count, which would pass the day a ninth lockfile appears.
+  The other three previously unaudited roots audit clean.
+
 - **`ProceduralMemory::reinforce`/`reinforce_with_strategy` could resurrect an
   expired-but-unswept procedure.** Every other write path on the struct
   (`relate`, `set_ttl`, `update_metadata`'s analog on `SemanticMemory`) rejects

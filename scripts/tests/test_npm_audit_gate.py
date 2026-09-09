@@ -115,6 +115,35 @@ def _run(npm: Path, root: Path, *extra: str) -> subprocess.CompletedProcess[str]
     )
 
 
+def _matrix_paths() -> "list[str]":
+    """The `path:` entries of the npm-audit matrix, in declaration order."""
+    job = _npm_audit_job()
+    marker = "\n        path:\n"
+    matrix = job[job.index(marker) + len(marker) :]
+    paths = []
+    for line in matrix.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            break
+        paths.append(stripped[2:].strip())
+    return paths
+
+
+def _tracked_lockfile_roots() -> "set[str]":
+    """Directories holding a git-TRACKED package-lock.json, matrix-style.
+
+    Tracked rather than on-disk: an untracked lockfile under `node_modules/`
+    or left by a local install is not something CI can audit, and sweeping the
+    working tree would make this test depend on whoever ran `npm install`
+    last. The repository root is spelled `.`, as the matrix spells it.
+    """
+    out = subprocess.run(
+        ["git", "ls-files", "package-lock.json", "*/package-lock.json", "**/package-lock.json"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split()
+    return {str(Path(p).parent) for p in out}
+
+
 class ClassifyTests(unittest.TestCase):
     def test_a_completed_report_yields_its_counts(self) -> None:
         counts = gate.classify(_report(high=2, low=1))
@@ -339,21 +368,36 @@ class WiringTests(unittest.TestCase):
         self.assertNotIn("run: npm audit", job)
 
     def test_every_audited_path_in_the_matrix_exists(self) -> None:
-        job = _npm_audit_job()
-        matrix = job[job.index("\n        path:\n") + len("\n        path:\n") :]
-        paths = []
-        for line in matrix.splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("- "):
-                break
-            paths.append(stripped[2:].strip())
-        self.assertGreaterEqual(len(paths), 4)
+        paths = _matrix_paths()
+        self.assertTrue(paths, "the audit matrix is empty -- the gate audits nothing")
         for path in paths:
             with self.subTest(path=path):
                 self.assertTrue(
                     (ROOT / path / "package-lock.json").is_file(),
                     f"{path} is audited by the matrix but has no package-lock.json",
                 )
+
+    def test_every_tracked_lockfile_is_audited(self) -> None:
+        """The other direction, which is the one that was missing.
+
+        `test_every_audited_path_in_the_matrix_exists` proved each matrix entry
+        was real; nothing proved the matrix was complete. It held four of the
+        eight tracked lockfiles, and the four it omitted were audited by
+        nothing. That is not hypothetical: GHSA-2883-xcg3-v3hh (js-yaml, high)
+        was published against `crates/velesdb-node` on 2026-09-09 and reached
+        the default branch, found by Dependabot rather than by this gate.
+
+        A count is deliberately not asserted -- a hard-coded 8 would pass the
+        day someone adds a ninth lockfile and forgets the matrix. The set is
+        compared to what git tracks.
+        """
+        unaudited = sorted(_tracked_lockfile_roots() - set(_matrix_paths()))
+        self.assertEqual(
+            unaudited,
+            [],
+            "package-lock.json tracked but absent from the npm-audit matrix in "
+            f"gate-contracts.yml, so no job audits it: {unaudited}",
+        )
 
 
 if __name__ == "__main__":

@@ -51,14 +51,27 @@ jobs:
     # --omit=dev is NOT used: the advisory above was dev-only, and the point
     # is to see it. Lockfile-only, so no install and no network beyond the
     # registry metadata.
+    #
+    # Every `package-lock.json` the repository tracks is listed, and
+    # `test_npm_audit_gate.NpmAuditMatrixCoverageTests` fails if one is
+    # missing. The list used to hold four of eight, and the gap was not
+    # theoretical: GHSA-2883-xcg3-v3hh (js-yaml, high) landed in
+    # `crates/velesdb-node` on 2026-09-09 and Dependabot found it, not this
+    # gate. A hand-kept list of paths is a list that silently stops matching
+    # the tree, so the list stays hand-kept -- readable in the matrix -- and a
+    # test holds it to the tree.
     strategy:
       fail-fast: false
       matrix:
         path:
-          - sdks/typescript
+          - .
+          - crates/velesdb-node
+          - crates/velesdb-wasm/e2e
           - demos/tauri-rag-app
-          - examples/react-wasm-search
+          - examples/ecommerce_recommendation
           - examples/node-express-rag
+          - examples/react-wasm-search
+          - sdks/typescript
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@v7
