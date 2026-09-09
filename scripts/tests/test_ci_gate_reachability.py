@@ -17,11 +17,15 @@ the merge button stays green, and it is the same class of defect as
 So the invariant is mechanical, not a checklist: every job in ``needs`` is
 either read by the chain or listed in ``CHAIN_EXEMPT`` with its reason.
 
-Deliberately regex-based, not PyYAML: ``gate-contracts.yml`` runs these
-suites with a bare ``actions/setup-python`` and installs nothing, so a
-third-party import here would be an ImportError in CI — a guard that cannot
-run. The parsers are unit-tested RED-then-GREEN on synthetic workflow text
-below before being pointed at the real file.
+Deliberately regex-based, not PyYAML. ``gate-contracts.yml`` does now install
+one pinned wheel, for ``test_local_ci``'s workflow reader — but this suite is
+the guard that decides whether every OTHER guard can refuse, so it stays
+buildable from the standard library alone. An import here would put the
+meta-guard behind a PyPI fetch: an outage would then read as a red gate on a
+clean tree, which is how this repository's npm gate came to be rewritten
+(``gate-contracts.yml``, ``npm-audit``). The parsers are unit-tested
+RED-then-GREEN on synthetic workflow text below before being pointed at the
+real file.
 """
 
 from __future__ import annotations
