@@ -502,6 +502,13 @@ jobs:
       - name: Test the deferred-removal guard
         run: python3 -m unittest scripts.tests.test_check_deferred_removals
 
+      # `local-ci.sh` n'est pas lance ici — il REJOUE ce job, l'executer dedans
+      # serait circulaire. Sa suite, elle, doit tourner : elle epingle deux
+      # defauts qu'il a deja eus, dont un faux vert (zero etape traitee
+      # rapportee comme un succes).
+      - name: Test the local gate replayer
+        run: python3 -m unittest scripts.tests.test_local_ci
+
       - name: Test feature-claims audit script
         run: python3 -m unittest scripts.tests.test_check_feature_claims
 
