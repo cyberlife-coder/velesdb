@@ -156,6 +156,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Registered in `scripts/guards.json` with a refusal vector whose accepted
   control is an npm double that exits 1 in both states.
 
+- **`ProceduralMemory::reinforce`/`reinforce_with_strategy` could resurrect an
+  expired-but-unswept procedure.** Every other write path on the struct
+  (`relate`, `set_ttl`, `update_metadata`'s analog on `SemanticMemory`) rejects
+  a TTL-expired id via `memory_helpers::ensure_live` before touching it, but
+  `reinforce_with_strategy` fetched the point with a raw `collection.get`
+  instead, so reinforcing an id whose TTL had elapsed but had not yet been
+  swept by `auto_expire` silently mutated confidence, usage and success/failure
+  counters on a point already invisible to `recall`, `list_all` and `relate`.
+  It now shares `ensure_live` with the rest of the struct and returns
+  `NotFound`, matching every sibling accessor.
+
 ## [6.0.0] - 2026-09-02
 
 ### Security

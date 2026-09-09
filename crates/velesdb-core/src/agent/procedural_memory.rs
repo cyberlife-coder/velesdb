@@ -470,7 +470,8 @@ impl ProceduralMemory {
     ///
     /// # Errors
     ///
-    /// Returns an error when procedure retrieval or update fails.
+    /// Returns [`AgentMemoryError::NotFound`] when the id is unknown or expired.
+    /// Returns other errors when collection access or persistence fails.
     pub fn reinforce(&self, procedure_id: u64, success: bool) -> Result<(), AgentMemoryError> {
         self.reinforce_with_strategy(procedure_id, success, &*self.reinforcement_strategy)
     }
@@ -479,7 +480,8 @@ impl ProceduralMemory {
     ///
     /// # Errors
     ///
-    /// Returns an error when procedure retrieval or update fails.
+    /// Returns [`AgentMemoryError::NotFound`] when the id is unknown or expired.
+    /// Returns other errors when collection access or persistence fails.
     pub fn reinforce_with_strategy(
         &self,
         procedure_id: u64,
@@ -488,12 +490,13 @@ impl ProceduralMemory {
     ) -> Result<(), AgentMemoryError> {
         let collection = memory_helpers::get_collection(&self.db, &self.collection_name)?;
 
-        let points = collection.get(&[procedure_id]);
-        let point = points
-            .into_iter()
-            .flatten()
-            .next()
-            .ok_or_else(|| AgentMemoryError::NotFound(format!("Procedure {procedure_id}")))?;
+        let point = memory_helpers::ensure_live(
+            &collection,
+            &self.collection_name,
+            &self.ttl,
+            MemoryKind::Procedural,
+            procedure_id,
+        )?;
 
         let state = Self::extract_procedure_state(&point)?;
         let now = std::time::SystemTime::now()
