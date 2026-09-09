@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod tests {
+    use super::super::error::AgentMemoryError;
     use super::super::procedural_memory::ProceduralMemory;
     use super::super::reinforcement::FixedRate;
     use super::super::ttl::{MemoryKind, MemoryTtl};
@@ -280,6 +281,30 @@ mod tests {
 
         let all = pm.list_all().unwrap();
         assert!(all.iter().any(|p| p.id == 8));
+    }
+
+    #[test]
+    fn test_reinforce_on_expired_procedure_returns_not_found() {
+        let dir = tempdir().unwrap();
+        let db = Arc::new(Database::open(dir.path()).unwrap());
+        // Shared TTL so the entry can be marked expired without physically
+        // removing the point — the "expired but not yet swept" window that
+        // every other write path on this struct already rejects via
+        // `memory_helpers::ensure_live`.
+        let ttl = Arc::new(MemoryTtl::new());
+        let pm =
+            ProceduralMemory::new(db, 4, Arc::clone(&ttl)).expect("ProceduralMemory::new failed");
+
+        let emb = vec![1.0_f32, 0.0, 0.0, 0.0];
+        pm.learn(1, "about_to_expire", &steps(1), Some(&emb), 0.5)
+            .unwrap();
+        ttl.set_expiry(MemoryKind::Procedural, 1, 0);
+
+        let err = pm.reinforce(1, true).unwrap_err();
+        assert!(
+            matches!(err, AgentMemoryError::NotFound(_)),
+            "reinforcing an expired-but-unswept procedure must return NotFound, got {err:?}"
+        );
     }
 
     // ── Serialize / Deserialize ────────────────────────────────────────────────
