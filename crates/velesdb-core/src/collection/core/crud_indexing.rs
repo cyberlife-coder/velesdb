@@ -272,8 +272,13 @@ impl Collection {
     /// duplicated between `apply_sparse_batch_upsert` (single-point path) and
     /// `apply_sparse_batch_bulk` (bulk path). Callers keep ownership of their
     /// input shape (`Vec<(u64, BTreeMap)>` vs `BTreeMap<String, Vec<(u64,
-    /// SparseVector)>>`) and build the iterator of triples themselves, which
-    /// keeps this helper allocation-free.
+    /// SparseVector)>>`) and build the iterator of triples themselves, so this
+    /// helper never copies a caller's collection.
+    ///
+    /// It is not allocation-free, and this doc said it was until the run
+    /// batching below arrived: `run` grows to the longest same-name run, and
+    /// holds borrows rather than clones. The claim was true when the helper
+    /// only forwarded one entry at a time; nothing re-checked it afterwards.
     ///
     /// Feature-gated on `persistence` — on targets without persistence the
     /// sparse WAL does not exist and the caller short-circuits.
