@@ -30,6 +30,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      # `scripts/local-ci.sh` reads the workflow with PyYAML, and setup-python
+      # ships a bare interpreter, so its suite died on ModuleNotFoundError --
+      # eight opaque failures for one absent wheel. Marking those tests skipped
+      # would have been the cheaper fix and the wrong one: a suite that skips
+      # in CI is a suite CI does not run.
+      - name: Install the guard suites' Python dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml==6.0.3
       - name: Run the guard contract suites
         run: python -m unittest discover -s scripts/tests -p "test_*.py" -t . -v
 

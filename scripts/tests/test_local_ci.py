@@ -150,6 +150,32 @@ class MissingToolTests(unittest.TestCase):
             self.assertIn("TOOL MISSING", result.stdout)
 
 
+class DependencyTests(unittest.TestCase):
+    """A missing PyYAML is announced, not surfaced as a traceback."""
+
+    def test_a_missing_pyyaml_names_the_install_command(self) -> None:
+        # Found in CI: setup-python ships a bare interpreter, so every
+        # invocation died on ModuleNotFoundError. The exit code was already
+        # right; the message was not, and an operator cannot act on a stack
+        # trace. Shadowing the module reproduces the absence on a machine that
+        # HAS it -- `test_a_gate_only_the_workflow_knows_about_is_listed` is
+        # the control: same invocation, no shadow, exit 0.
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "yaml.py").write_text(
+                "raise ImportError('shadowed by the test')", encoding="utf-8"
+            )
+            wf = Path(tmp) / "ci.yml"
+            wf.write_text(workflow_with("Any gate", "'echo ok'"), encoding="utf-8")
+            env = dict(os.environ, WORKFLOW=str(wf), JOBS="lint", PYTHONPATH=tmp)
+            result = subprocess.run(
+                [str(SCRIPT), "--list"], capture_output=True, text=True,
+                cwd=REPO_ROOT, env=env,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("pip install pyyaml", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+
 class EscapingTests(unittest.TestCase):
     """The bug this script shipped with, pinned so it cannot return."""
 

@@ -28,6 +28,16 @@ LIST_ONLY=0
 
 [ -f "$WORKFLOW" ] || { echo "ERROR: $WORKFLOW not found - run from the repository root" >&2; exit 2; }
 
+# PyYAML reads the workflow. Hand-rolling that parser would be a reader able to
+# mis-understand the very file this script exists to trust, so the dependency
+# stays - but its absence is ANNOUNCED. It used to surface as a Python
+# traceback: the right exit code carrying no instruction, on a machine that
+# needed one `pip install`. Eight opaque failures in CI came from exactly that.
+python3 -c 'import yaml' 2>/dev/null || {
+  echo "ERROR: PyYAML is required to read $WORKFLOW - install it with: python3 -m pip install pyyaml" >&2
+  exit 2
+}
+
 steps_json=$(python3 - "$WORKFLOW" "$JOBS" <<'PY'
 import json, sys, yaml
 wf, jobs = sys.argv[1], sys.argv[2].split(",")
@@ -49,7 +59,7 @@ for job in jobs:
             print(f"ERROR: non-string `run:` in step {st.get('name','(unnamed)')!r} "
                   f"of job {job!r} - malformed workflow", file=sys.stderr)
             sys.exit(2)
-        out.append({"job": job, "name": st.get("name", "(sans nom)"), "run": run})
+        out.append({"job": job, "name": st.get("name", "(unnamed)"), "run": run})
 json.dump(out, sys.stdout)
 PY
 ) || exit 2
@@ -96,10 +106,10 @@ while IFS=$'\t' read -r job name run; do
   fi
 done < <(printf '%s' "$steps_json" | python3 -c '
 import base64, json, sys
-# base64 pour la commande : un aller-retour par sequences d echappement
-# transforme les continuations de ligne `\` en `\`+`n` litteral, et le shell
-# recoit un argument `n`. Mesure faite — le gate rendait un FAUX ROUGE sur
-# clippy, ce qui est la facon la plus sure de faire desactiver une porte.
+# base64 for the command: a round trip through escape sequences turns a
+# trailing line continuation into a literal backslash + `n`, and the shell then
+# receives an argument `n`. Measured - the gate rendered a FALSE RED on clippy,
+# which is the surest way to get a gate switched off.
 for s in json.load(sys.stdin):
     print("\t".join([s["job"], s["name"], base64.b64encode(s["run"].encode()).decode()]))
 ')
@@ -113,10 +123,10 @@ if [ "$LIST_ONLY" = "1" ]; then
   echo "$total step(s) declared, $skipped not replayable locally."
   exit 0
 fi
-# Un gate qui annonce un succes sans avoir rien execute est pire qu'un gate
-# absent : l'operateur croit avoir verifie. Ce cas s'est produit — le lecteur
-# plantait sur une valeur inattendue et la boucle tournait a vide en rapportant
-# « toutes les portes passent ». Zero etape traitee est desormais une ERREUR.
+# A gate that announces a pass without having executed anything is worse than
+# an absent gate: the operator believes they verified. This happened - the
+# reader crashed on an unexpected value, the loop ran empty, and it reported
+# "every gate passes". Zero steps processed is an ERROR now.
 if [ "$total" -eq 0 ]; then
   echo "ERROR: no steps read from $WORKFLOW (job(s): $JOBS) - refusing to report a pass that verified nothing" >&2
   exit 2
