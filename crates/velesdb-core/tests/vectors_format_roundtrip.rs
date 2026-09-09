@@ -1,4 +1,12 @@
-#![allow(clippy::cast_precision_loss)] // ids into f32 coordinates, deliberately
+#![cfg(feature = "persistence")]
+#![allow(clippy::cast_precision_loss)]
+// ids into f32 coordinates, deliberately
+
+// Without `persistence` there is no `Database`, no mapped arena and no
+// `.vectors` at all. Most files in this directory carry the same gate. It is
+// not decoration: `quality-deep.yml` runs `cargo miri test
+// --no-default-features -p velesdb-core` WITHOUT `--lib`, which compiles every
+// test target - so an ungated file breaks a job that only runs on Sundays.
 
 //! End-to-end coverage of `{basename}.vectors` across a real database lifecycle.
 //!
@@ -60,6 +68,18 @@ const ADOPTED: u64 = 64;
 const SMALL: u64 = 5;
 /// Enough new points to force the mapping to grow past its persisted capacity.
 const EXTRA: u64 = 32;
+
+// The size witness below reads "the file is larger than the payload it
+// declares". Capacity doubles on growth, so that holds only while the doubled
+// capacity OVERSHOOTS the final count: at EXTRA == ADOPTED the arena lands on
+// exactly 2x, and the witness would report "copied" on an arena that was in
+// fact adopted - a false negative carrying a confident message. The constraint
+// lives here, where changing a constant trips it, rather than in a sentence
+// nobody re-reads.
+const _: () = assert!(
+    EXTRA < ADOPTED,
+    "the adoption witness needs the doubled capacity to overshoot the final count"
+);
 
 fn make_vector(id: u64) -> Vec<f32> {
     (0..DIM)
@@ -145,6 +165,27 @@ fn payload(path: &Path) -> Vec<Vec<f32>> {
                 .collect()
         })
         .collect()
+}
+
+/// Every disposable arena file under `root`.
+///
+/// `ArenaHome::claim` names them `hnsw-{token}.arena`, so their presence is a
+/// public, on-disk witness that a graph really owns one — no `pub(crate)`
+/// access needed, and no property of the growth strategy inferred.
+fn disposable_arenas(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("test: read dir").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "arena") {
+                found.push(path);
+            }
+        }
+    }
+    found
 }
 
 fn digest(path: &Path) -> u64 {
@@ -293,21 +334,25 @@ fn a_grown_arena_was_adopted_rather_than_copied() {
 #[test]
 fn dropping_a_collection_with_a_disposable_arena_keeps_its_vectors() {
     let dir = TempDir::new().expect("test: tempdir");
-    seed(&dir, 0..ADOPTED, StorageMode::SQ8);
+    seed(&dir, 0..SMALL, StorageMode::SQ8);
     let file = vectors_file(dir.path());
     let before = digest(&file);
 
-    {
-        let db = Database::open(dir.path()).expect("test: reopen");
-        let collection = db
-            .get_vector_collection("docs")
-            .expect("test: collection exists");
-        assert_eq!(
-            collection.len(),
-            usize::try_from(ADOPTED).expect("test: fits"),
-            "test: the fixture did not load"
-        );
-    }
+    let db = Database::open(dir.path()).expect("test: reopen");
+    let collection = db
+        .get_vector_collection("docs")
+        .expect("test: collection exists");
+    assert_eq!(
+        collection.len(),
+        usize::try_from(SMALL).expect("test: fits"),
+        "test: the fixture did not load"
+    );
+    assert!(
+        !disposable_arenas(dir.path()).is_empty(),
+        "test: no hnsw-*.arena exists, so this collection never owned a disposable \
+         arena and the drop hazard is never reached"
+    );
+    drop(db);
 
     assert!(
         file.exists(),
@@ -319,3 +364,12 @@ fn dropping_a_collection_with_a_disposable_arena_keeps_its_vectors() {
         "test: closing a collection rewrote its durable vector store"
     );
 }
+
+// Deliberately NOT asserted above: that the disposable arena file is gone after
+// the drop. It is not, and that is not a defect — `ArenaHome::sweep_stale`
+// exists precisely because "a crash or a kill skips Drop, so a collection
+// directory can carry arenas from a previous run", and the sweep runs at the
+// next collection open. An arena outliving its owner is an anticipated state,
+// so asserting its absence would pin a promise the design does not make. The
+// hazard this test guards is the other one: that the drop takes `.vectors`
+// with it.
