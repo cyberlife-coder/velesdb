@@ -308,6 +308,25 @@ jobs:
             --exclude velesdb-python --exclude velesdb-node \
             -- -D warnings -D clippy::pedantic
 
+      # The same sweep with `gpu` OFF. The step above is the ONLY workspace
+      # clippy in CI and it always enables `gpu`, so a lint that fires only in
+      # the gpu-less build was linted by nothing -- `cargo hack
+      # --feature-powerset` runs `check`, not `clippy`, and only on
+      # velesdb-memory. One such lint was sitting on `develop`:
+      # `try_gpu_route`'s receiver is read only inside `#[cfg(feature =
+      # "gpu")]`, so `clippy::unused_self` fired for anyone building without
+      # it, on a tree CI called clean.
+      #
+      # Cost was measured before adding it rather than assumed: with that one
+      # lint fixed, this configuration reports zero findings across the
+      # workspace, so the step goes green on arrival instead of importing a
+      # backlog.
+      - name: Run Clippy (strict, no gpu)
+        run: |
+          cargo clippy --workspace --all-targets --features persistence,update-check \
+            --exclude velesdb-python --exclude velesdb-node \
+            -- -D warnings -D clippy::pedantic
+
       # velesdb-node is a cdylib: `--all-targets` would build a test harness that
       # links N-API symbols and fail (same reason velesdb-python is excluded
       # above). Lint just its library target, which links cleanly. The crate's

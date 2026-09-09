@@ -428,7 +428,14 @@ impl NativeHnswInner {
     ///
     /// `query.len()` is authoritative for the index dimension: a query of
     /// wrong length would fail distance evaluation anyway.
+    // Both allows have the same single reason: this body is entirely inside
+    // `#[cfg(feature = "gpu")]`, so with the feature off nothing in the
+    // signature is read -- neither the parameters nor the receiver. The
+    // receiver's allow was missing, which made
+    // `cargo clippy -p velesdb-core --lib --features persistence` fail on a
+    // clean tree: CI lints one feature set, and it always includes `gpu`.
     #[allow(unused_variables)] // Reason: parameters unused when `gpu` is off
+    #[allow(clippy::unused_self)] // Reason: receiver unused when `gpu` is off
     fn try_gpu_route(
         &self,
         query: &[f32],
