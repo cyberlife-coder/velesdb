@@ -50,8 +50,15 @@ pub fn merge_with_delta(
 /// Merges HNSW search results (as [`crate::ScoredResult`]) with delta buffer
 /// results.
 ///
-/// Zero-allocation variant that avoids the `ScoredResult` → `(u64, f32)` →
-/// `ScoredResult` round-trip in the search pipeline.
+/// Takes and returns [`crate::ScoredResult`] so callers already on that shape
+/// need no conversion pass of their own around the merge.
+///
+/// It is NOT allocation-free, and the doc claimed it was: the body collects
+/// into a `Vec<(u64, f32)>` and collects back, which is the very round-trip the
+/// old wording said it avoided. Merging on tuples is deliberate — it shares
+/// [`DistanceMetric::sort_results`] and the truncate with [`merge_with_delta`],
+/// and duplicating both to drop two allocations is a trade nobody has measured.
+/// Measure before making that trade; do not restore the claim without it.
 #[must_use]
 pub fn merge_with_delta_scored(
     hnsw_results: Vec<crate::scored_result::ScoredResult>,
