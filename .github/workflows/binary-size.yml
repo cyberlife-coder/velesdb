@@ -11,22 +11,27 @@ name: Binary Size Gate
 # absorb the Linux x86_64 build delta this CI runner produces. They catch a
 # real regression (a multi-MB dependency, a bundled asset), not exact bytes.
 
-# Called by ci.yml on pull requests (see the note in gate-contracts.yml). The
-# `pull_request` trigger is gone so the ceiling reports inside `CI Success`, the
-# only required check. The `push` filter below still applies on develop/main.
+# Called by ci.yml (see the note in gate-contracts.yml) on pull requests AND on
+# pushes to develop/main -- ci.yml's own `push:` filter is a strict superset of
+# the paths this gate cares about. The `pull_request` trigger is gone so the
+# ceiling reports inside `CI Success`, the only required check.
+#
+# The standalone `push:` trigger is gone too, and its removal is a fix rather
+# than a loosening. It fired on the same develop/main pushes as ci.yml, and
+# both instances landed in the concurrency group below -- which, unlike
+# propagation-guard.yml's, does not carry `github.workflow`, so the two
+# collided and one killed the other. It was ALWAYS the standalone that died:
+# 60 of the last 60 standalone runs are `cancelled`, and the gate has never
+# once completed in this form. A workflow whose entire history reads
+# `cancelled` tells a reader the gate is broken; keeping it would also leave a
+# race that could one day cancel the ci.yml instance instead, turning a clean
+# tree red on a required check.
+#
+# Coverage is unchanged, and that is checkable rather than asserted: every path
+# the old filter listed is matched by ci.yml's `push:` paths (`Cargo.toml`,
+# `Cargo.lock`, `crates/**`, `scripts/**`, `.github/workflows/**`).
 on:
   workflow_call:
-  push:
-    branches: [develop, main]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/velesdb-core/**"
-      - "crates/velesdb-server/**"
-      - "crates/velesdb-cli/**"
-      - "crates/velesdb-migrate/**"
-      - "scripts/check_binary_size.py"
-      - ".github/workflows/binary-size.yml"
   workflow_dispatch:
 
 concurrency:
