@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
-# Rejoue localement les portes que la CI exécute — en les LISANT dans ci.yml.
+# Replays the gates CI runs, by READING them from the workflow.
 #
-# POURQUOI DÉRIVER PLUTÔT QUE RECOPIER
-# ------------------------------------
-# Une liste de commandes recopiée à la main dérive de la CI, et la dérive est
-# silencieuse : elle se manifeste par une porte locale verte suivie d'une CI
-# rouge. C'est arrivé — `cargo clippy -p velesdb-core --lib` passait pendant que
-# la CI, qui lance `--workspace --all-targets`, compilait le code de TEST et
-# refusait. Ce script lit donc les `run:` du workflow ; il ne les connaît pas.
+# WHY DERIVED RATHER THAN COPIED
+# ------------------------------
+# A hand-copied list of commands drifts from CI, and the drift is silent: it
+# shows up as a green local gate followed by a red CI. That happened —
+# `cargo clippy -p velesdb-core --lib` passed while CI, which runs
+# `--workspace --all-targets`, compiled the TEST code and refused. So this
+# script reads the workflow's `run:` blocks; it does not know them.
 #
-# Une étape que ce script ne peut pas rejouer est ANNONCÉE, jamais omise en
-# silence : une porte sautée sans le dire vaut moins qu'une porte absente.
+# A step it cannot replay is ANNOUNCED, never dropped in silence: a gate
+# skipped without saying so is worth less than a gate that is absent, because
+# the operator believes it ran.
+#
+# JOBS defaults to every gate job, not just `lint`. The first version replayed
+# `lint` alone and reported all-green on a tree that CI then failed on
+# `hygiene` and `gate-contracts` — the very narrowness this tool exists to
+# remove, reproduced inside it.
 set -uo pipefail
 
-# Surchargeable pour que la suite puisse pointer un workflow synthetique et
-# prouver que la liste des portes est DERIVEE, pas recopiee.
+# Overridable so the suite can point at a synthetic workflow and prove the
+# gate list is DERIVED rather than copied.
 WORKFLOW="${WORKFLOW:-.github/workflows/ci.yml}"
-JOBS="${JOBS:-lint}"
+JOBS="${JOBS:-lint,hygiene}"
 LIST_ONLY=0
 [ "${1:-}" = "--list" ] && LIST_ONLY=1
 
-[ -f "$WORKFLOW" ] || { echo "ERREUR: $WORKFLOW introuvable — lancer depuis la racine du dépôt" >&2; exit 2; }
+[ -f "$WORKFLOW" ] || { echo "ERROR: $WORKFLOW not found - run from the repository root" >&2; exit 2; }
 
 steps_json=$(python3 - "$WORKFLOW" "$JOBS" <<'PY'
 import json, sys, yaml
@@ -30,24 +36,28 @@ out = []
 for job in jobs:
     spec = (doc.get("jobs") or {}).get(job)
     if spec is None:
-        print(f"ERREUR: job '{job}' absent de {wf}", file=sys.stderr); sys.exit(2)
+        print(f"ERROR: job '{job}' not found in {wf}", file=sys.stderr); sys.exit(2)
     for st in spec.get("steps", []):
         run = st.get("run")
         if run is None:
             continue
-        # YAML rend `run: true` comme un booleen ; sans coercition le lecteur
-        # plante et — bien pire — la boucle appelante traite zero etape en
-        # silence tout en annoncant un succes.
-        run = run if isinstance(run, str) else str(run)
+        # YAML reads `run: true` as a boolean. Coercing it produced "True",
+        # which is not a command — the gate then reported a failure it had
+        # invented. A non-string `run:` is a malformed workflow, so say so
+        # instead of inventing a verdict about it.
+        if not isinstance(run, str):
+            print(f"ERROR: non-string `run:` in step {st.get('name','(unnamed)')!r} "
+                  f"of job {job!r} - malformed workflow", file=sys.stderr)
+            sys.exit(2)
         out.append({"job": job, "name": st.get("name", "(sans nom)"), "run": run})
 json.dump(out, sys.stdout)
 PY
 ) || exit 2
 
-# Ce qu'un poste de travail ne peut pas rejouer : l'infrastructure du runner.
+# What a workstation cannot replay: the runner's own infrastructure.
 skippable='GITHUB_|RUNNER_|apt-get|actions/|\$\{\{'
 
-total=0; ran=0; failed=0; skipped=0
+total=0; ran=0; failed=0; skipped=0; missing=0
 declare -a failures=()
 
 while IFS=$'\t' read -r job name run; do
@@ -55,7 +65,7 @@ while IFS=$'\t' read -r job name run; do
   cmd=$(printf '%s' "$run" | base64 -d)
   if printf '%s' "$cmd" | grep -qE "$skippable"; then
     skipped=$((skipped+1))
-    printf '  ⤼ SAUTÉE  [%s] %s\n     (infrastructure du runner, non rejouable localement)\n' "$job" "$name"
+    printf '  SKIPPED  [%s] %s\n     (runner infrastructure, not replayable locally)\n' "$job" "$name"
     continue
   fi
   if [ "$LIST_ONLY" = "1" ]; then
@@ -63,11 +73,25 @@ while IFS=$'\t' read -r job name run; do
     continue
   fi
   printf '  ▶ %s ... ' "$name"
-  if out=$(bash -c "$cmd" 2>&1); then
+  out=$(bash -c "$cmd" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
     ran=$((ran+1)); printf 'ok\n'
+  elif [ "$rc" -eq 127 ] || printf '%s' "$out" | grep -qiE 'command not found|no such command|no such file or directory: [a-z]|is not installed'; then
+    # A tool this machine does not have is NOT a gate that refused. Reporting
+    # it as a failure is how a gate starts crying wolf, and a gate that cries
+    # wolf gets ignored - then switched off. Say what is missing instead.
+    #
+    # The pattern list is plural because each launcher phrases it differently:
+    # a shell says "command not found" and exits 127, while `cargo machete`
+    # says "no such command" and exits 101. The first version knew only the
+    # shell's wording and reported cargo-machete as a FAILING GATE on a clean
+    # tree - the exact false red this branch exists to prevent.
+    missing=$((missing+1))
+    printf 'TOOL MISSING\n'
+    printf '%s\n' "$out" | head -2 | sed 's/^/       /'
   else
     failed=$((failed+1)); failures+=("$name")
-    printf 'ÉCHEC\n'
+    printf 'FAILED\n'
     printf '%s\n' "$out" | tail -15 | sed 's/^/       /'
   fi
 done < <(printf '%s' "$steps_json" | python3 -c '
@@ -83,10 +107,10 @@ for s in json.load(sys.stdin):
 echo
 if [ "$LIST_ONLY" = "1" ]; then
   if [ "$total" -eq 0 ]; then
-    echo "ERREUR: aucune étape lue dans $WORKFLOW (job(s): $JOBS)" >&2
+    echo "ERROR: no steps read from $WORKFLOW (job(s): $JOBS)" >&2
     exit 2
   fi
-  echo "$total étape(s) déclarée(s), $skipped non rejouable(s) localement."
+  echo "$total step(s) declared, $skipped not replayable locally."
   exit 0
 fi
 # Un gate qui annonce un succes sans avoir rien execute est pire qu'un gate
@@ -94,13 +118,13 @@ fi
 # plantait sur une valeur inattendue et la boucle tournait a vide en rapportant
 # « toutes les portes passent ». Zero etape traitee est desormais une ERREUR.
 if [ "$total" -eq 0 ]; then
-  echo "ERREUR: aucune étape lue dans $WORKFLOW (job(s): $JOBS) — refus de rapporter un succès qui n'a rien vérifié" >&2
+  echo "ERROR: no steps read from $WORKFLOW (job(s): $JOBS) - refusing to report a pass that verified nothing" >&2
   exit 2
 fi
-echo "Portes rejouées: $ran — échecs: $failed — non rejouables: $skipped (sur $total déclarées)"
+echo "Gates replayed: $ran - failed: $failed - tool missing: $missing - runner-only: $skipped (of $total declared)"
 if [ "$failed" -gt 0 ]; then
-  printf 'ÉCHOUÉ: %s\n' "${failures[*]}" >&2
+  printf 'FAILED: %s\n' "${failures[*]}" >&2
   exit 1
 fi
-echo "Toutes les portes rejouables passent. Les $skipped autres ne sont vérifiées QUE par la CI."
+echo "Every gate this machine could run passes. $skipped runner-only and $missing missing-tool gates are checked ONLY by CI."
 exit 0

@@ -20,7 +20,11 @@ SCRIPT = REPO_ROOT / "scripts" / "local-ci.sh"
 
 
 def run(workflow: Path | None, *args: str) -> subprocess.CompletedProcess:
-    env = dict(os.environ)
+    # The synthetic workflows below declare `lint` only. The script's default
+    # covers every gate job, and asking for an absent one is an error — see
+    # `test_an_unknown_job_answers_2`. Scoping here keeps these tests about
+    # derivation rather than about job coverage.
+    env = dict(os.environ, JOBS="lint")
     if workflow is not None:
         env["WORKFLOW"] = str(workflow)
     return subprocess.run(
@@ -45,7 +49,7 @@ class DerivationTests(unittest.TestCase):
     def test_a_gate_only_the_workflow_knows_about_is_listed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wf = Path(tmp) / "ci.yml"
-            wf.write_text(workflow_with("Gate nobody hard-coded", "true"), encoding="utf-8")
+            wf.write_text(workflow_with("Gate nobody hard-coded", "'echo ok'"), encoding="utf-8")
             result = run(wf, "--list")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Gate nobody hard-coded", result.stdout)
@@ -57,7 +61,7 @@ class DerivationTests(unittest.TestCase):
             wf = Path(tmp) / "ci.yml"
             wf.write_text(workflow_with("Needs the runner", "echo $GITHUB_SHA"), encoding="utf-8")
             result = run(wf, "--list")
-            self.assertIn("SAUTÉE", result.stdout)
+            self.assertIn("SKIPPED", result.stdout)
             self.assertIn("Needs the runner", result.stdout)
 
 
@@ -67,7 +71,7 @@ class RefusalTests(unittest.TestCase):
     def test_a_failing_gate_makes_the_script_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wf = Path(tmp) / "ci.yml"
-            wf.write_text(workflow_with("Gate that fails", "false"), encoding="utf-8")
+            wf.write_text(workflow_with("Gate that fails", "'exit 1'"), encoding="utf-8")
             result = run(wf)
             self.assertEqual(result.returncode, 1)
             self.assertIn("Gate that fails", result.stderr)
@@ -82,7 +86,7 @@ class RefusalTests(unittest.TestCase):
     def test_an_unknown_job_answers_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wf = Path(tmp) / "ci.yml"
-            wf.write_text(workflow_with("x", "true"), encoding="utf-8")
+            wf.write_text(workflow_with("x", "'echo ok'"), encoding="utf-8")
             env = dict(os.environ, WORKFLOW=str(wf), JOBS="does-not-exist")
             result = subprocess.run(
                 [str(SCRIPT), "--list"], capture_output=True, text=True,
@@ -106,16 +110,44 @@ class EmptyRunTests(unittest.TestCase):
             )
             result = run(wf)
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            self.assertIn("aucune étape", result.stderr)
+            self.assertIn("no steps read", result.stderr)
 
-    def test_a_boolean_run_value_does_not_silently_empty_the_run(self) -> None:
-        # `run: true` is parsed by YAML as a boolean, not the string "true".
+    def test_a_boolean_run_value_is_refused_rather_than_coerced(self) -> None:
+        # `run: true` is a boolean to YAML. Coercing it produced "True", which
+        # is not a command, so the gate reported a failure it had invented — a
+        # verdict about nothing. A non-string `run:` is a malformed workflow.
         with tempfile.TemporaryDirectory() as tmp:
             wf = Path(tmp) / "ci.yml"
             wf.write_text(workflow_with("Boolean run", "true"), encoding="utf-8")
             result = run(wf)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("non-string", result.stderr)
+
+
+class MissingToolTests(unittest.TestCase):
+    """A tool this machine lacks is not a gate that refused."""
+
+    def test_a_shell_style_missing_command_is_not_a_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            wf = Path(tmp) / "ci.yml"
+            wf.write_text(workflow_with("Needs a tool", "'definitely-not-installed-xyz'"), encoding="utf-8")
+            result = run(wf)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("Portes rejouées: 1", result.stdout)
+            self.assertIn("TOOL MISSING", result.stdout)
+
+    def test_a_cargo_style_missing_subcommand_is_not_a_failure(self) -> None:
+        # `cargo machete` says "no such command" and exits 101, not 127. The
+        # first version knew only the shell's wording and reported a FAILING
+        # GATE on a clean tree.
+        with tempfile.TemporaryDirectory() as tmp:
+            wf = Path(tmp) / "ci.yml"
+            wf.write_text(
+                workflow_with("Cargo subcommand", "'echo \"error: no such command: machete\" >&2; exit 101'"),
+                encoding="utf-8",
+            )
+            result = run(wf)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("TOOL MISSING", result.stdout)
 
 
 class EscapingTests(unittest.TestCase):
